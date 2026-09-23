@@ -4,8 +4,13 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
+# Import explicite des modèles pour que SQLAlchemy enregistre les tables dans Base.metadata
+import app.messages.models  # noqa: F401
+import app.users.models  # noqa: F401
 from app.core.database import Base, engine
+from app.messages.router import router as messages_router
 
 
 @asynccontextmanager
@@ -19,7 +24,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="ADDA75 Project API", version="0.1.0", lifespan=lifespan)
-# TODO: inclure les routers des domaines (à partir de l'étape 2)
+
+# Configuration CORS pour permettre aux clients web (desktop et mobile) d'accéder à l'API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(messages_router)
+# TODO: inclure les routers des autres domaines (comptes, auth, utilisateurs) par Binôme A
 
 
 @app.get("/health")
