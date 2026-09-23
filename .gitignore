@@ -23,3 +23,14 @@ bin/
 *.log
 .env
 .env.local
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Base SQLite locale
+backend/data/*
+!backend/data/.gitkeep
