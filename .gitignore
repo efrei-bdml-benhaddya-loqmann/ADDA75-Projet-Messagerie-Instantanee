@@ -34,3 +34,9 @@ __pycache__/
 # Base SQLite locale
 backend/data/*
 !backend/data/.gitkeep
+
+# AI Agent configuration and skills
+.agents/
+.agent/
+agent/
+skills-lock.json
