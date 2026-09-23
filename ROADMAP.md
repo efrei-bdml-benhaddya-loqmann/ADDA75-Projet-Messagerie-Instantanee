@@ -18,7 +18,7 @@
 | Tests | `pytest` + `TestClient` FastAPI (gère aussi les WebSocket) | Automatiser ce qu'on testerait à la main dans Postman |
 | Qualité | `ruff` (lint + format) | Même style de code pour nous deux |
 | Clients | 2 pages HTML/JS vanilla (`desktop/`, `mobile/`) + `common/api.js` partagé | Le front n'est pas noté sur le design |
-| Bonus | Accusé de réception **+** rate limiting **+** Swagger | Swagger est quasi gratuit avec FastAPI, donc on ne compte pas dessus seul : les deux autres montrent une vraie maîtrise |
+| Bonus | **Accusé de réception** (principal) **+** rate limiting **+** Swagger | L'accusé de réception prouve la maîtrise du WebSocket (critère à 5 pts) et illustre la réponse à la question « destinataire hors ligne » (`envoye` tant qu'il n'est pas livré). Le rate limiting réutilise le TP4. Swagger est quasi gratuit avec FastAPI, donc on ne compte pas dessus seul |
 
 ### Points d'attention propres à Python/FastAPI
 - **JSON en camelCase, code en snake_case** : l'énoncé impose `expediteurId`, `dateEnvoi`, `motDePasse`. On écrit `expediteur_id` en Python et on configure les schémas Pydantic avec `alias_generator=to_camel` + `populate_by_name=True`.
@@ -95,9 +95,11 @@ class ConnectionManager:
 
 ## 3. Répartition
 
+Répartition validée le 2026-09-23.
+
 Principe : **chacun possède un domaine backend complet** (modèle → service → route → tests), et **chacun relit toutes les PR de l'autre**. En soutenance, les deux doivent pouvoir expliquer tout le projet.
 
-### 👤 Loqmann (A) — Identité & sécurité
+### 👤 Binôme (A) — Identité & sécurité
 Barème : API REST (3) + JWT (3) + une partie de l'architecture (4) et du bonus (2).
 
 - [ ] Squelette : `uv init`, dépendances, `main.py`, `core/config.py`, `core/database.py`, `.env.example`, ruff
@@ -113,7 +115,7 @@ Barème : API REST (3) + JWT (3) + une partie de l'architecture (4) et du bonus 
 - [ ] Client **desktop** + partie REST de `common/api.js` (inscription, login, liste utilisateurs, historique)
 - [ ] Rapport : schéma d'architecture, **question REST vs WebSocket pour l'historique**, choix sécurité
 
-### 👤 Binôme (B) — Messages & temps réel
+### 👤 Loqmann (B) — Messages & temps réel
 Barème : WebSocket (5) + persistance (2) + une partie de l'architecture (4) et du bonus (2).
 
 - [ ] Modèle `Message` (FK vers `User`, index sur le couple expéditeur/destinataire)
@@ -139,9 +141,9 @@ Barème : WebSocket (5) + persistance (2) + une partie de l'architecture (4) et 
 
 ## 4. Ordre des étapes (suit le §7 de l'énoncé)
 
-| # | Étape | A (Loqmann) | B (Binôme) | Critère de fin |
+| # | Étape | A (Binôme) | B (Loqmann) | Critère de fin |
 | :-: | :--- | :--- | :--- | :--- |
-| 0 | Cadrage | Squelette projet | Relit le squelette, écrit le stub `ConnectionManager` | `uv run uvicorn app.main:app` démarre, contrats en place |
+| 0 | Cadrage | Relit le squelette (PR #1) | Squelette projet, écrit le stub `ConnectionManager` | `uv run uvicorn app.main:app` démarre, contrats en place |
 | 1 | Modèles & BDD | `User` | `Message` | Tables créées dans SQLite |
 | 2 | REST sans sécurité | comptes, login (sans JWT), utilisateurs | historique | Tout passe dans Postman |
 | 3 | JWT | `security.py`, `get_current_user` | branche l'historique sur l'utilisateur courant | `401` vérifié par un test |
