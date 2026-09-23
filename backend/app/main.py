@@ -11,6 +11,7 @@ import app.messages.models  # noqa: F401
 import app.users.models  # noqa: F401
 from app.core.database import Base, engine
 from app.messages.router import router as messages_router
+from app.realtime.router import router as realtime_router
 
 
 @asynccontextmanager
@@ -35,6 +36,7 @@ app.add_middleware(
 )
 
 app.include_router(messages_router)
+app.include_router(realtime_router)
 # TODO: inclure les routers des autres domaines (comptes, auth, utilisateurs) par Binôme A
 
 
