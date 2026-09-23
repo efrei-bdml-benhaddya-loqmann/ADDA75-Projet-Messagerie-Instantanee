@@ -15,28 +15,41 @@ class ConnectionManager:
     """
 
     def __init__(self) -> None:
-        """Initialise le registre vide."""
-        raise NotImplementedError
+        # Dictionnaire associant l'identifiant utilisateur à son objet WebSocket actif.
+        self._active_connections: dict[int, WebSocket] = {}
 
     async def connect(self, user_id: int, ws: WebSocket) -> None:
         """Enregistre la connexion de l'utilisateur (le token a déjà été vérifié)."""
-        raise NotImplementedError
+        self._active_connections[user_id] = ws
 
     def disconnect(self, user_id: int) -> None:
         """Retire l'utilisateur du registre (déconnexion volontaire ou coupure)."""
-        raise NotImplementedError
+        self._active_connections.pop(user_id, None)
 
     def is_online(self, user_id: int) -> bool:
         """Indique si l'utilisateur a une connexion WebSocket active."""
-        raise NotImplementedError
+        return user_id in self._active_connections
 
     async def send_to(self, user_id: int, payload: dict) -> bool:
         """Envoie `payload` en JSON à l'utilisateur.
 
         Renvoie True si le message a été transmis, False s'il est hors ligne.
+        Doc FastAPI WebSockets : https://fastapi.tiangolo.com/advanced/websockets/
         """
-        raise NotImplementedError
+        ws = self._active_connections.get(user_id)
+        if ws is None:
+            return False
+
+        try:
+            await ws.send_json(payload)
+            return True
+        except Exception:
+            # Si l'envoi échoue (connexion brutalement fermée côté client),
+            # on purge immédiatement l'utilisateur du registre pour éviter
+            # de futures tentatives d'envoi vers un socket mort.
+            self.disconnect(user_id)
+            return False
 
 
-# TODO: instancier `manager = ConnectionManager()`, l'instance unique partagée par
-# l'endpoint /ws/messages et par GET /api/utilisateurs
+manager = ConnectionManager()
+
