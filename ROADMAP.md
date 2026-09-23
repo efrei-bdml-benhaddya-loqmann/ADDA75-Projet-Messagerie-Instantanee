@@ -102,7 +102,6 @@ Principe : **chacun possède un domaine backend complet** (modèle → service �
 ### 👤 Binôme (A) — Identité & sécurité
 Barème : API REST (3) + JWT (3) + une partie de l'architecture (4) et du bonus (2).
 
-- [ ] Squelette : `uv init`, dépendances, `main.py`, `core/config.py`, `core/database.py`, `.env.example`, ruff
 - [ ] Modèle `User` (username unique, `password_hash`)
 - [ ] `POST /api/comptes` : hachage, `409` si doublon, validation Pydantic
 - [ ] `POST /api/auth/login` : vérification, génération du JWT, `401` si échec
@@ -118,6 +117,7 @@ Barème : API REST (3) + JWT (3) + une partie de l'architecture (4) et du bonus 
 ### 👤 Loqmann (B) — Messages & temps réel
 Barème : WebSocket (5) + persistance (2) + une partie de l'architecture (4) et du bonus (2).
 
+- [ ] Squelette : `uv init`, dépendances, `main.py`, `core/config.py`, `core/database.py`, `.env.example`, ruff (PR #1)
 - [ ] Modèle `Message` (FK vers `User`, index sur le couple expéditeur/destinataire)
 - [ ] `messages/service.py` : `save_message(...)`, `get_conversation(user_a, user_b)`
 - [ ] `GET /api/messages/{utilisateurId}` (d'abord sans sécurité, puis avec `get_current_user`)
