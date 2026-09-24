@@ -1,4 +1,8 @@
-"""Dépendances FastAPI pour l'authentification et l'autorisation."""
+"""Dépendances FastAPI pour l'authentification et l'autorisation.
+
+Contrat partagé défini dans ROADMAP.md (§2) :
+`get_current_user` garantit le renvoi d'un User authentifié ou lève une HTTPException(401).
+"""
 
 from typing import Annotated
 
@@ -13,11 +17,11 @@ from app.users.models import User
 
 
 def get_current_user(
-    db: Annotated[Session, Depends(get_db)],
     authorization: Annotated[
         str | None,
         Header(description="Jeton sous format: Bearer <token>"),
     ] = None,
+    db: Annotated[Session, Depends(get_db)] = None,
 ) -> User:
     """Valide le jeton JWT transmis dans le header Authorization.
 
@@ -25,7 +29,7 @@ def get_current_user(
     malformé, expiré ou si l'utilisateur n'existe plus en base.
     """
     if not authorization:
-        raise UnauthorizedException("En-tête Authorization manquant")
+        raise UnauthorizedException("En-tête d'authentification manquant")
 
     parts = authorization.split()
     if len(parts) != 2 or parts[0].lower() != "bearer":
@@ -36,8 +40,11 @@ def get_current_user(
 
     try:
         user_id = decode_access_token(token)
-    except jwt.PyJWTError:
+    except jwt.InvalidTokenError:
         raise UnauthorizedException("Jeton invalide ou expiré") from None
+
+    if db is None:
+        db = next(get_db())
 
     user = db.get(User, user_id)
     if user is None:

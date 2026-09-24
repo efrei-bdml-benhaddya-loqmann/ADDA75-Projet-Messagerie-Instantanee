@@ -117,19 +117,19 @@ Barème : API REST (3) + JWT (3) + une partie de l'architecture (4) et du bonus 
 ### 👤 Loqmann (B) — Messages & temps réel
 Barème : WebSocket (5) + persistance (2) + une partie de l'architecture (4) et du bonus (2).
 
-- [ ] Squelette : `uv init`, dépendances, `main.py`, `core/config.py`, `core/database.py`, `.env.example`, ruff (PR #1)
-- [ ] Modèle `Message` (FK vers `User`, index sur le couple expéditeur/destinataire)
-- [ ] `messages/service.py` : `save_message(...)`, `get_conversation(user_a, user_b)`
-- [ ] `GET /api/messages/{utilisateurId}` (d'abord sans sécurité, puis avec `get_current_user`)
-- [ ] `ConnectionManager` (connexions + présence)
-- [ ] Endpoint `/ws/messages` : vérif du token avant `accept()`, boucle de réception, validation du JSON par un schéma Pydantic
-- [ ] Traitement d'un message : **persister** → **retransmettre** au destinataire s'il est connecté → confirmer à l'expéditeur
-- [ ] Destinataire hors ligne : message persisté, récupéré via l'historique à la reconnexion
-- [ ] Nettoyage propre à la déconnexion (`WebSocketDisconnect`)
-- [ ] Tests pytest : WS refusé sans token, message A → B reçu, message persisté
-- [ ] Bonus **accusé de réception** (`envoye` / `livre` / `lu`)
-- [ ] Client **mobile** + partie WebSocket de `common/api.js` (connexion, envoi, réception)
-- [ ] Rapport : **question destinataire hors ligne (lien avec Kafka)**, difficultés du temps réel
+- [x] Squelette : `uv init`, dépendances, `main.py`, `core/config.py`, `core/database.py`, `.env.example`, ruff (PR #1)
+- [x] Modèle `Message` (FK vers `User`, index sur le couple expéditeur/destinataire)
+- [x] `messages/service.py` : `save_message(...)`, `get_conversation(user_a, user_b)`
+- [x] `GET /api/messages/{utilisateurId}` (d'abord sans sécurité, puis avec `get_current_user`)
+- [x] `ConnectionManager` (connexions + présence)
+- [x] Endpoint `/ws/messages` : vérif du token avant `accept()`, boucle de réception, validation du JSON par un schéma Pydantic
+- [x] Traitement d'un message : **persister** → **retransmettre** au destinataire s'il est connecté → confirmer à l'expéditeur
+- [x] Destinataire hors ligne : message persisté, récupéré via l'historique à la reconnexion
+- [x] Nettoyage propre à la déconnexion (`WebSocketDisconnect`)
+- [x] Tests pytest : WS refusé sans token, message A → B reçu, message persisté
+- [x] Bonus **accusé de réception** (`envoye` / `livre` / `lu`)
+- [x] Client **mobile** + partie WebSocket de `common/api.js` (connexion, envoi, réception)
+- [x] Rapport : **question destinataire hors ligne (lien avec Kafka)**, difficultés du temps réel
 
 ### 👥 Ensemble
 - [ ] Étape 0 : valider ce document, écrire les contrats (section 2) en stubs

@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Messagerie Instantanée — Client Mobile</title>
+    <style>
+        :root {
+            --primary: #007aff;
+            --bg-light: #f2f2f7;
+            --bubble-sent: #007aff;
+            --bubble-received: #e5e5ea;
+            --text-dark: #000000;
+            --text-light: #ffffff;
+            --status-gray: #8e8e93;
+            --status-blue: #34c759;
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        body {
+            background-color: var(--bg-light);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+        }
+        .mobile-container {
+            width: 100%;
+            max-width: 480px;
+            background: #ffffff;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        header {
+            background: #f8f8f8;
+            border-bottom: 1px solid #d1d1d6;
+            padding: 12px 16px;
+        }
+        .header-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        .badge {
+            font-size: 11px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+        .badge-offline { background: #ff3b30; color: white; }
+        .badge-online { background: #34c759; color: white; }
+
+        .settings-panel {
+            background: #fdfdfd;
+            border-bottom: 1px solid #e5e5ea;
+            padding: 10px 16px;
+            font-size: 13px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .settings-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .settings-row input {
+            flex: 1;
+            padding: 6px 10px;
+            border: 1px solid #d1d1d6;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+        .btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .btn-secondary {
+            background: #8e8e93;
+        }
+
+        .chat-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: #f2f2f7;
+        }
+        .bubble {
+            max-width: 75%;
+            padding: 8px 12px;
+            border-radius: 16px;
+            font-size: 14px;
+            line-height: 1.35;
+            position: relative;
+            word-wrap: break-word;
+        }
+        .bubble-sent {
+            align-self: flex-end;
+            background: var(--bubble-sent);
+            color: var(--text-light);
+            border-bottom-right-radius: 4px;
+        }
+        .bubble-received {
+            align-self: flex-start;
+            background: var(--bubble-received);
+            color: var(--text-dark);
+            border-bottom-left-radius: 4px;
+        }
+        .meta-info {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 4px;
+            margin-top: 4px;
+            font-size: 10px;
+            opacity: 0.8;
+        }
+        .status-check {
+            font-weight: bold;
+        }
+        .status-read {
+            color: #5ac8fa;
+        }
+
+        .typing-indicator {
+            font-size: 11px;
+            font-style: italic;
+            color: var(--status-gray);
+            height: 16px;
+            margin-bottom: 4px;
+            padding-left: 8px;
+        }
+
+        footer {
+            background: #f8f8f8;
+            border-top: 1px solid #d1d1d6;
+            padding: 8px 12px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        footer input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid #d1d1d6;
+            border-radius: 20px;
+            font-size: 14px;
+            outline: none;
+        }
+        footer button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="mobile-container">
+        <header>
+            <div class="header-title">
+                <span>📱 Messagerie (Mobile)</span>
+                <span id="connectionBadge" class="badge badge-offline">Déconnecté</span>
+            </div>
+        </header>
+
+        <section class="settings-panel">
+            <div class="settings-row">
+                <input id="serverHost" type="text" placeholder="Hôte (ex: localhost:8000)" value="localhost:8000">
+                <button id="btnToggleConnect" class="btn">Connecter</button>
+            </div>
+            <div class="settings-row">
+                <input id="userToken" type="text" placeholder="Jeton JWT de votre compte">
+            </div>
+            <div class="settings-row">
+                <input id="targetUserId" type="number" placeholder="ID Destinataire (ex: 2)" value="2">
+                <button id="btnLoadHistory" class="btn btn-secondary">Historique REST</button>
+            </div>
+        </section>
+
+        <main id="chatBody" class="chat-body"></main>
+
+        <div id="typingIndicator" class="typing-indicator"></div>
+
+        <footer>
+            <input id="messageInput" type="text" placeholder="Message..." disabled>
+            <button id="btnSend" disabled>➤</button>
+        </footer>
+    </div>
+
+    <script type="module">
+        import { ChatWebSocketClient, fetchMessageHistory } from "../common/api.js";
+
+        const badge = document.getElementById("connectionBadge");
+        const btnToggleConnect = document.getElementById("btnToggleConnect");
+        const btnLoadHistory = document.getElementById("btnLoadHistory");
+        const btnSend = document.getElementById("btnSend");
+        const messageInput = document.getElementById("messageInput");
+        const serverHostInput = document.getElementById("serverHost");
+        const userTokenInput = document.getElementById("userToken");
+        const targetUserIdInput = document.getElementById("targetUserId");
+        const chatBody = document.getElementById("chatBody");
+        const typingIndicator = document.getElementById("typingIndicator");
+
+        const client = new ChatWebSocketClient();
+        let typingTimeout = null;
+
+        function getStatusIcon(statut) {
+            if (statut === "lu") return `<span class="status-check status-read">✓✓</span>`;
+            if (statut === "livre") return `<span class="status-check">✓✓</span>`;
+            return `<span class="status-check">✓</span>`;
+        }
+
+        function appendMessage(item, isSent) {
+            const bubble = document.createElement("div");
+            bubble.className = `bubble ${isSent ? "bubble-sent" : "bubble-received"}`;
+            bubble.dataset.id = item.id;
+
+            const timeStr = item.dateEnvoi ? new Date(item.dateEnvoi).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
+            const statusHtml = isSent ? getStatusIcon(item.statut) : "";
+
+            bubble.innerHTML = `
+                <div>${escapeHtml(item.contenu)}</div>
+                <div class="meta-info">
+                    <span>${timeStr}</span>
+                    ${statusHtml}
+                </div>
+            `;
+            chatBody.appendChild(bubble);
+            chatBody.scrollTop = chatBody.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement("div");
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        btnToggleConnect.addEventListener("click", () => {
+            if (client.isConnected()) {
+                client.disconnect();
+                return;
+            }
+
+            const host = serverHostInput.value.trim();
+            const token = userTokenInput.value.trim();
+            if (!token) {
+                alert("Veuillez saisir votre jeton JWT");
+                return;
+            }
+
+            const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+            const wsBase = `${protocol}//${host}`;
+
+            client.connect(wsBase, token, {
+                onOpen: () => {
+                    badge.className = "badge badge-online";
+                    badge.textContent = "Connecté";
+                    btnToggleConnect.textContent = "Déconnecter";
+                    messageInput.disabled = false;
+                    btnSend.disabled = false;
+
+                    // Si on engage la conversation, signaler la lecture
+                    const targetId = Number(targetUserIdInput.value);
+                    if (targetId) client.sendRead(targetId);
+                },
+                onClose: (event) => {
+                    badge.className = "badge badge-offline";
+                    badge.textContent = event.code === 1008 ? "Refusé (1008)" : "Déconnecté";
+                    btnToggleConnect.textContent = "Connecter";
+                    messageInput.disabled = true;
+                    btnSend.disabled = true;
+                },
+                onError: () => {
+                    badge.className = "badge badge-offline";
+                    badge.textContent = "Erreur WS";
+                },
+                onMessage: (msg) => {
+                    const targetId = Number(targetUserIdInput.value);
+                    if (msg.expediteurId === targetId) {
+                        appendMessage(msg, false);
+                        // Accusé de lecture automatique pour les messages entrants
+                        client.sendRead(targetId);
+                    }
+                },
+                onAck: (ack) => {
+                    appendMessage(ack, true);
+                },
+                onReadAck: (readAck) => {
+                    // Mettre à jour l'affichage des coches bleues (statut 'lu')
+                    const bubbles = chatBody.querySelectorAll(".bubble-sent");
+                    bubbles.forEach(b => {
+                        const icon = b.querySelector(".status-check");
+                        if (icon) {
+                            icon.className = "status-check status-read";
+                            icon.textContent = "✓✓";
+                        }
+                    });
+                },
+                onTyping: (data) => {
+                    const targetId = Number(targetUserIdInput.value);
+                    if (data.expediteurId === targetId && data.isTyping) {
+                        typingIndicator.textContent = `L'utilisateur #${targetId} est en train d'écrire...`;
+                        clearTimeout(typingTimeout);
+                        typingTimeout = setTimeout(() => {
+                            typingIndicator.textContent = "";
+                        }, 2500);
+                    }
+                }
+            });
+        });
+
+        btnLoadHistory.addEventListener("click", async () => {
+            const host = serverHostInput.value.trim();
+            const token = userTokenInput.value.trim();
+            const targetId = Number(targetUserIdInput.value);
+            if (!token || !targetId) {
+                alert("Veuillez renseigner le token et l'ID du destinataire");
+                return;
+            }
+
+            const protocol = window.location.protocol === "https:" ? "https:" : "http:";
+            const apiBase = `${protocol}//${host}`;
+
+            try {
+                const history = await fetchMessageHistory(apiBase, token, targetId);
+                chatBody.innerHTML = "";
+                history.forEach(m => {
+                    const isSent = (m.destinataireId === targetId);
+                    appendMessage(m, isSent);
+                });
+            } catch (err) {
+                alert("Erreur lors de la récupération de l'historique : " + err.message);
+            }
+        });
+
+        function handleSend() {
+            const text = messageInput.value.trim();
+            const targetId = Number(targetUserIdInput.value);
+            if (!text || !targetId) return;
+
+            client.sendMessage(targetId, text);
+            messageInput.value = "";
+            client.sendTyping(targetId, false);
+        }
+
+        btnSend.addEventListener("click", handleSend);
+        messageInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") handleSend();
+        });
+
+        messageInput.addEventListener("input", () => {
+            const targetId = Number(targetUserIdInput.value);
+            if (targetId && client.isConnected()) {
+                client.sendTyping(targetId, true);
+            }
+        });
+    </script>
+</body>
+</html>

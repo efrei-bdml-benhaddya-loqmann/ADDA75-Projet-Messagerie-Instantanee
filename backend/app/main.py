@@ -4,11 +4,16 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-import app.users.models  # noqa: F401 (Enregistre le modèle User auprès de Base.metadata)
+# Import explicite des modèles pour que SQLAlchemy enregistre les tables dans Base.metadata
+import app.messages.models  # noqa: F401
+import app.users.models  # noqa: F401
 from app.auth.router import router as auth_router
 from app.core.database import Base, engine
 from app.core.errors import AppException, app_exception_handler
+from app.messages.router import router as messages_router
+from app.realtime.router import router as realtime_router
 from app.users.router import router as users_router
 
 
@@ -29,12 +34,23 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Gestionnaire d'exceptions
+# Configuration CORS pour permettre aux clients web (desktop et mobile) d'accéder à l'API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Gestionnaire global d'exceptions
 app.add_exception_handler(AppException, app_exception_handler)
 
-# Inclusion des routers
+# Inclusion des routers de l'ensemble des domaines
 app.include_router(auth_router)
 app.include_router(users_router)
+app.include_router(messages_router)
+app.include_router(realtime_router)
 
 
 @app.get("/health", tags=["monitoring"])

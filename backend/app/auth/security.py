@@ -1,7 +1,13 @@
 """Hachage des mots de passe et gestion des JWT.
 
-Contrat partagé : `create_access_token` et `decode_access_token` sont aussi utilisés
+Contrat partagé défini dans ROADMAP.md (§2) :
+`create_access_token` et `decode_access_token` sont utilisés
 par le domaine realtime pour authentifier la connexion WebSocket.
+
+Références externes :
+- PyJWT : https://pyjwt.readthedocs.io/
+- RFC 7519 (JSON Web Token) : https://datatracker.ietf.org/doc/html/rfc7519
+- Pwdlib : https://frankie567.github.io/pwdlib/
 """
 
 from datetime import UTC, datetime, timedelta
@@ -12,28 +18,30 @@ from pwdlib.hashers.bcrypt import BcryptHasher
 
 from app.core.config import settings
 
-# Initialise le gestionnaire bcrypt conformément au pyproject.toml (pwdlib[bcrypt])
-_password_hash = PasswordHash((BcryptHasher(),))
+# Utilisation explicite du hasher Bcrypt pour respecter les dépendances du projet (pwdlib[bcrypt])
+password_hasher = PasswordHash((BcryptHasher(),))
+_password_hash = password_hasher
 
 
 def hash_password(password: str) -> str:
     """Renvoie le hash bcrypt (salé) du mot de passe."""
-    return _password_hash.hash(password)
+    return password_hasher.hash(password)
 
 
 def verify_password(password: str, password_hash: str) -> bool:
     """Indique si le mot de passe correspond au hash stocké."""
-    return _password_hash.verify(password, password_hash)
+    return password_hasher.verify(password, password_hash)
 
 
 def create_access_token(user_id: int) -> str:
     """Génère un JWT signé contenant l'id utilisateur (claim `sub`) et une expiration (`exp`)."""
     now = datetime.now(UTC)
     expire = now + timedelta(minutes=settings.jwt_expire_minutes)
+    # Selon la RFC 7519 (§4.1.2), le claim 'sub' doit idéalement être une chaîne de caractères
     payload = {
         "sub": str(user_id),
-        "iat": now,
-        "exp": expire,
+        "iat": int(now.timestamp()),
+        "exp": int(expire.timestamp()),
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
@@ -44,7 +52,7 @@ def decode_access_token(token: str) -> int:
     Lève jwt.InvalidTokenError si le token est invalide, falsifié ou expiré.
     """
     payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-    sub = payload.get("sub")
-    if sub is None:
+    user_id_str = payload.get("sub")
+    if user_id_str is None:
         raise jwt.InvalidTokenError("Claim 'sub' manquant dans le token")
-    return int(sub)
+    return int(user_id_str)
