@@ -57,15 +57,15 @@ def client(db_session: Session) -> Iterator[TestClient]:
 def test_ws_rejected_without_token(client: TestClient) -> None:
     # Doit être rejeté avec le code 1008 (Policy Violation)
     with pytest.raises(WebSocketDisconnect) as exc_info:
-        with client.websocket_connect("/ws/messages"):
-            pass
+        with client.websocket_connect("/ws/messages") as ws:
+            ws.receive_json()
     assert exc_info.value.code == 1008
 
 
 def test_ws_rejected_with_invalid_token(client: TestClient) -> None:
     with pytest.raises(WebSocketDisconnect) as exc_info:
-        with client.websocket_connect("/ws/messages?token=faux_token"):
-            pass
+        with client.websocket_connect("/ws/messages?token=faux_token") as ws:
+            ws.receive_json()
     assert exc_info.value.code == 1008
 
 
@@ -199,3 +199,110 @@ def test_ws_offline_then_reconnect_history(client: TestClient, db_session: Sessi
     assert messages[0]["contenu"] == "Tu verras ce message a ton retour"
     assert messages[0]["statut"] == "envoye"
 
+
+
+def _two_users(db_session: Session) -> tuple[User, User]:
+    u1 = User(username="alice", password_hash="hash")
+    u2 = User(username="bob", password_hash="hash")
+    db_session.add_all([u1, u2])
+    db_session.commit()
+    return u1, u2
+
+
+def test_ws_rejected_when_user_no_longer_exists(client: TestClient) -> None:
+    token = create_access_token(999)
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect(f"/ws/messages?token={token}") as ws:
+            ws.receive_json()
+    assert exc_info.value.code == 1008
+
+
+def test_ws_message_to_unknown_or_self_is_refused(
+    client: TestClient, db_session: Session
+) -> None:
+    u1, _ = _two_users(db_session)
+    token_a = create_access_token(u1.id)
+
+    with client.websocket_connect(f"/ws/messages?token={token_a}") as ws_a:
+        ws_a.send_json({"type": "message", "destinataireId": 999, "contenu": "fantome"})
+        err = ws_a.receive_json()
+        assert err["type"] == "error"
+        assert err["code"] == "DESTINATAIRE_INCONNU"
+
+        ws_a.send_json({"type": "message", "destinataireId": u1.id, "contenu": "moi"})
+        err = ws_a.receive_json()
+        assert err["type"] == "error"
+        assert err["code"] == "DESTINATAIRE_INVALIDE"
+
+    assert db_session.query(Message).count() == 0
+
+
+def test_ws_invalid_json_keeps_connection_open(client: TestClient, db_session: Session) -> None:
+    u1, _ = _two_users(db_session)
+    token_a = create_access_token(u1.id)
+
+    with client.websocket_connect(f"/ws/messages?token={token_a}") as ws_a:
+        ws_a.send_text("ceci n'est pas du JSON")
+        err = ws_a.receive_json()
+        assert err["type"] == "error"
+        assert err["code"] == "JSON_INVALIDE"
+
+        ws_a.send_json({"type": "ping"})
+        assert ws_a.receive_json() == {"type": "pong"}
+
+
+def test_ws_pending_messages_marked_delivered_on_reconnect(
+    client: TestClient, db_session: Session
+) -> None:
+    u1, u2 = _two_users(db_session)
+    token_a = create_access_token(u1.id)
+    token_b = create_access_token(u2.id)
+
+    with client.websocket_connect(f"/ws/messages?token={token_a}") as ws_a:
+        ws_a.send_json({"type": "message", "destinataireId": u2.id, "contenu": "hors ligne"})
+        ack = ws_a.receive_json()
+        assert ack["statut"] == "envoye"
+
+        # Bob se connecte : le message en attente passe à "livre" et Alice est notifiée
+        with client.websocket_connect(f"/ws/messages?token={token_b}"):
+            delivered = ws_a.receive_json()
+            assert delivered["type"] == "delivered_ack"
+            assert delivered["destinataireId"] == u2.id
+            assert delivered["messageIds"] == [ack["id"]]
+
+    db_session.expire_all()
+    assert db_session.get(Message, ack["id"]).statut == "livre"
+
+
+def test_ws_offline_recipient_triggers_simulated_webhook(
+    client: TestClient, db_session: Session, caplog: pytest.LogCaptureFixture
+) -> None:
+    u1, u2 = _two_users(db_session)
+    token_a = create_access_token(u1.id)
+
+    with caplog.at_level("INFO"):
+        with client.websocket_connect(f"/ws/messages?token={token_a}") as ws_a:
+            ws_a.send_json({"type": "message", "destinataireId": u2.id, "contenu": "coucou"})
+            ws_a.receive_json()
+
+    assert f"notification envoyée à l'utilisateur {u2.id}" in caplog.text
+
+
+def test_ws_message_rate_limited(client: TestClient, db_session: Session) -> None:
+    from app.core.rate_limit import ws_message_limiter
+
+    u1, u2 = _two_users(db_session)
+    token_a = create_access_token(u1.id)
+
+    with client.websocket_connect(f"/ws/messages?token={token_a}") as ws_a:
+        for i in range(ws_message_limiter.max_requests):
+            ws_a.send_json({"type": "message", "destinataireId": u2.id, "contenu": f"m{i}"})
+            assert ws_a.receive_json()["type"] == "ack"
+
+        ws_a.send_json({"type": "message", "destinataireId": u2.id, "contenu": "spam"})
+        err = ws_a.receive_json()
+        assert err["type"] == "error"
+        assert err["code"] == "RATE_LIMITED"
+        assert err["retryAfter"] > 0
+
+    assert db_session.query(Message).count() == ws_message_limiter.max_requests

@@ -43,3 +43,19 @@ async def test_connection_manager_handles_broken_socket() -> None:
     assert sent is False
     # La socket défaillante doit être évincée automatiquement du registre
     assert not manager.is_online(42)
+
+
+@pytest.mark.anyio
+async def test_disconnect_of_old_socket_keeps_new_connection() -> None:
+    """Un utilisateur se reconnecte avant que l'ancienne socket soit détectée comme morte :
+    la fermeture tardive de l'ancienne ne doit pas évincer la nouvelle."""
+    manager = ConnectionManager()
+    old_ws, new_ws = AsyncMock(), AsyncMock()
+
+    await manager.connect(1, old_ws)
+    await manager.connect(1, new_ws)
+    manager.disconnect(1, old_ws)
+
+    assert manager.is_online(1)
+    assert await manager.send_to(1, {"type": "ping"}) is True
+    new_ws.send_json.assert_awaited_once()

@@ -13,8 +13,19 @@ class CamelModel(BaseModel):
 class UserCreate(CamelModel):
     """Payload pour l'inscription : POST /api/comptes."""
 
-    username: str = Field(..., min_length=1, description="Nom d'utilisateur unique")
-    mot_de_passe: str = Field(..., min_length=1, description="Mot de passe en clair")
+    # max_length=50 : aligné sur la colonne String(50), que SQLite ne fait pas respecter
+    username: str = Field(
+        ...,
+        min_length=3,
+        max_length=50,
+        pattern=r"^[A-Za-z0-9_.-]+$",
+        description="Nom d'utilisateur unique (lettres, chiffres, _ . -)",
+        examples=["alice"],
+    )
+    # max_length=72 : bcrypt ignore tout ce qui dépasse 72 octets
+    mot_de_passe: str = Field(
+        ..., min_length=4, max_length=72, description="Mot de passe en clair", examples=["secret1"]
+    )
 
 
 class UserOut(CamelModel):

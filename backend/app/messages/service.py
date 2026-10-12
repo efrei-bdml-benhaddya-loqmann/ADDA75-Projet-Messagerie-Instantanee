@@ -92,3 +92,22 @@ def mark_messages_as_read(
     if updated_ids:
         db.commit()
     return updated_ids
+
+
+def mark_pending_as_delivered(db: Session, destinataire_id: int) -> dict[int, list[int]]:
+    """Passe à 'livre' les messages restés 'envoye' pendant que le destinataire était hors ligne.
+
+    Appelé quand le destinataire ouvre sa connexion WebSocket. Renvoie les identifiants
+    mis à jour regroupés par expéditeur, pour notifier chacun d'eux.
+    """
+    stmt = select(Message).where(
+        Message.destinataire_id == destinataire_id,
+        Message.statut == "envoye",
+    )
+    delivered: dict[int, list[int]] = {}
+    for msg in db.execute(stmt).scalars().all():
+        msg.statut = "livre"
+        delivered.setdefault(msg.expediteur_id, []).append(msg.id)
+    if delivered:
+        db.commit()
+    return delivered

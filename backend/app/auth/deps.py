@@ -7,7 +7,8 @@ Contrat partagé défini dans ROADMAP.md (§2) :
 from typing import Annotated
 
 import jwt
-from fastapi import Depends, Header
+from fastapi import Depends
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.auth.security import decode_access_token
@@ -15,12 +16,17 @@ from app.core.database import get_db
 from app.core.errors import UnauthorizedException
 from app.users.models import User
 
+# Déclare le schéma "Bearer" dans OpenAPI : Swagger affiche le bouton « Authorize ».
+# auto_error=False : sinon FastAPI renverrait lui-même une erreur (403 selon les versions),
+# alors que l'énoncé exige 401 ; on la lève nous-mêmes ci-dessous.
+bearer_scheme = HTTPBearer(
+    auto_error=False,
+    description="Jeton obtenu via POST /api/auth/login (coller uniquement le jeton)",
+)
+
 
 def get_current_user(
-    authorization: Annotated[
-        str | None,
-        Header(description="Jeton sous format: Bearer <token>"),
-    ] = None,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)] = None,
     db: Annotated[Session, Depends(get_db)] = None,
 ) -> User:
     """Valide le jeton JWT transmis dans le header Authorization.
@@ -28,18 +34,13 @@ def get_current_user(
     Garantit une réponse HTTP 401 Unauthorized si le jeton est absent,
     malformé, expiré ou si l'utilisateur n'existe plus en base.
     """
-    if not authorization:
-        raise UnauthorizedException("En-tête d'authentification manquant")
-
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        msg = "Format d'autorisation invalide. Format attendu : Bearer <token>"
-        raise UnauthorizedException(msg)
-
-    token = parts[1]
+    if credentials is None:
+        raise UnauthorizedException(
+            "En-tête d'authentification manquant ou mal formé (attendu : Bearer <token>)"
+        )
 
     try:
-        user_id = decode_access_token(token)
+        user_id = decode_access_token(credentials.credentials)
     except jwt.InvalidTokenError:
         raise UnauthorizedException("Jeton invalide ou expiré") from None
 

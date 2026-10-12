@@ -97,3 +97,17 @@ def test_login_user_not_found(client: TestClient) -> None:
         json={"username": "inconnu", "motDePasse": "nimporte"},
     )
     assert response.status_code == 401
+
+
+def test_login_rate_limited_returns_429(client: TestClient) -> None:
+    """Anti brute-force : au-delà de la limite, 429 avec l'en-tête Retry-After (TP5)."""
+    from app.core.rate_limit import login_limiter
+
+    payload = {"username": "cible", "motDePasse": "essai"}
+    for _ in range(login_limiter.max_requests):
+        assert client.post("/api/auth/login", json=payload).status_code == 401
+
+    response = client.post("/api/auth/login", json=payload)
+    assert response.status_code == 429
+    assert int(response.headers["Retry-After"]) > 0
+    assert response.json()["code"] == "RATE_LIMITED"

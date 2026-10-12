@@ -14,7 +14,8 @@ class ConnectionManager:
     """Associe chaque utilisateur connecté à sa connexion WebSocket.
 
     État interne attendu : un dictionnaire user_id -> WebSocket, en mémoire du process
-    (d'où la contrainte d'un seul worker Uvicorn).
+    (d'où la contrainte d'un seul worker Uvicorn). Une seule connexion par utilisateur :
+    la plus récente remplace la précédente.
     """
 
     def __init__(self) -> None:
@@ -29,9 +30,15 @@ class ConnectionManager:
         """Enregistre la connexion de l'utilisateur (le token a déjà été vérifié)."""
         self._active_connections[user_id] = ws
 
-    def disconnect(self, user_id: int) -> None:
-        """Retire l'utilisateur du registre (déconnexion volontaire ou coupure)."""
-        self._active_connections.pop(user_id, None)
+    def disconnect(self, user_id: int, ws: WebSocket | None = None) -> None:
+        """Retire l'utilisateur du registre (déconnexion volontaire ou coupure).
+
+        Si `ws` est fourni, on ne retire l'entrée que si c'est bien cette socket-là :
+        quand un client se reconnecte avant que l'ancienne socket soit détectée comme
+        morte, la fermeture tardive de l'ancienne ne doit pas évincer la nouvelle.
+        """
+        if ws is None or self._active_connections.get(user_id) is ws:
+            self._active_connections.pop(user_id, None)
 
     def is_online(self, user_id: int) -> bool:
         """Indique si l'utilisateur a une connexion WebSocket active."""
@@ -54,7 +61,7 @@ class ConnectionManager:
             # Si l'envoi échoue (connexion brutalement fermée côté client),
             # on purge immédiatement l'utilisateur du registre pour éviter
             # de futures tentatives d'envoi vers un socket mort.
-            self.disconnect(user_id)
+            self.disconnect(user_id, ws)
             return False
 
 

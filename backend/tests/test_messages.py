@@ -134,3 +134,13 @@ def test_rest_get_messages_success(client: TestClient, db_session: Session) -> N
     assert "statut" in data[0]
     assert data[0]["contenu"] == "Salut Bob"
     assert data[1]["contenu"] == "Salut Alice"
+
+
+def test_rest_get_messages_not_found_error_format(client: TestClient, db_session: Session) -> None:
+    u1 = User(username="alice", password_hash="hash")
+    db_session.add(u1)
+    db_session.commit()
+
+    headers = {"Authorization": f"Bearer {create_access_token(u1.id)}"}
+    res = client.get("/api/messages/999", headers=headers)
+    assert res.json()["code"] == "NOT_FOUND"

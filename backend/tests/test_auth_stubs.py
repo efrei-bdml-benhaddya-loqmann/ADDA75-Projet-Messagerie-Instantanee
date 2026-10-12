@@ -1,6 +1,7 @@
 import jwt
 import pytest
 from fastapi import HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -46,7 +47,7 @@ def test_get_current_user_missing_header() -> None:
 
     try:
         with pytest.raises(HTTPException) as exc_info:
-            get_current_user(authorization=None, db=session)
+            get_current_user(credentials=None, db=session)
         assert exc_info.value.status_code == 401
     finally:
         session.close()
@@ -64,7 +65,10 @@ def test_get_current_user_valid_token() -> None:
         session.refresh(user)
 
         token = create_access_token(user_id=user.id)
-        current = get_current_user(authorization=f"Bearer {token}", db=session)
+        current = get_current_user(
+            credentials=HTTPAuthorizationCredentials(scheme="Bearer", credentials=token),
+            db=session,
+        )
         assert current.id == user.id
         assert current.username == "alice"
     finally:
