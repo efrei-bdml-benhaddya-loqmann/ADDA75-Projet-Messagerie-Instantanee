@@ -85,3 +85,18 @@ def test_get_users_success_with_token(client: TestClient, db_session: Session) -
     assert users[1]["id"] == user2.id
     assert users[1]["username"] == "user2"
     assert users[1]["connecte"] is False
+
+
+def test_create_account_validation_error_format(client: TestClient) -> None:
+    """422 : format d'erreur homogène {detail, code, erreurs}."""
+    response = client.post("/api/comptes", json={"username": "x" * 51, "motDePasse": "pass1"})
+    assert response.status_code == 422
+    body = response.json()
+    assert body["code"] == "VALIDATION_ERROR"
+    assert body["erreurs"][0]["champ"] == "username"
+
+
+def test_openapi_declares_bearer_scheme(client: TestClient) -> None:
+    """Swagger : bouton « Authorize » disponible grâce au schéma de sécurité Bearer."""
+    schemes = client.get("/openapi.json").json()["components"]["securitySchemes"]
+    assert any(s.get("scheme") == "bearer" for s in schemes.values())

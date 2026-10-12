@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, get_db
+from app.core.rate_limit import login_limiter, ws_message_limiter
 from app.main import app
 
 # Base SQLite en mémoire partagée pour la session de test
@@ -20,6 +21,13 @@ test_engine = create_engine(
     poolclass=StaticPool,
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiters() -> None:
+    """Les limiteurs sont globaux : on repart de zéro à chaque test."""
+    ws_message_limiter.reset()
+    login_limiter.reset()
 
 
 @pytest.fixture(autouse=True)

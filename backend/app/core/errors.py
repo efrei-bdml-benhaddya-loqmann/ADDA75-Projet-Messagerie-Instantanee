@@ -1,8 +1,10 @@
 """Gestion homogène des erreurs de l'API."""
 
+import math
 from typing import Any
 
 from fastapi import HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -62,9 +64,34 @@ class NotFoundException(AppException):
         )
 
 
+class TooManyRequestsException(AppException):
+    """Erreur 429 Too Many Requests, avec l'en-tête Retry-After (comme au TP5)."""
+
+    def __init__(self, retry_after: float) -> None:
+        super().__init__(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Trop de tentatives, réessayez plus tard",
+            code="RATE_LIMITED",
+            headers={"Retry-After": str(math.ceil(retry_after))},
+        )
+
+
 async def app_exception_handler(_: Request, exc: AppException) -> JSONResponse:
     """Gestionnaire global pour les AppException."""
     content: dict[str, Any] = {"detail": exc.detail}
     if exc.code:
         content["code"] = exc.code
     return JSONResponse(status_code=exc.status_code, content=content, headers=exc.headers)
+
+
+async def validation_exception_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+    """422 au même format {detail, code} que les autres erreurs, avec le détail par champ."""
+    erreurs = [
+        # loc vaut par ex. ("body", "username") : on garde le nom du champ
+        {"champ": str(err["loc"][-1]), "message": err["msg"]}
+        for err in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={"detail": "Données invalides", "code": "VALIDATION_ERROR", "erreurs": erreurs},
+    )

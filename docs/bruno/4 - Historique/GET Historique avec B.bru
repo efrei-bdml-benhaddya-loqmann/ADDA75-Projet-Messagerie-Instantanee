@@ -1,0 +1,25 @@
+meta {
+  name: GET Historique avec B
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/messages/{{userBId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("Tableau JSON (vide tant qu'aucun message n'a été envoyé en WebSocket)", function() {
+    expect(res.getBody()).to.be.an("array");
+  });
+}

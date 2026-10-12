@@ -2,381 +2,197 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Messagerie Instantanée — Client Mobile</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Messages — Client Mobile</title>
+    <link rel="stylesheet" href="../common/imessage.css">
     <style>
-        :root {
-            --primary: #007aff;
-            --bg-light: #f2f2f7;
-            --bubble-sent: #007aff;
-            --bubble-received: #e5e5ea;
-            --text-dark: #000000;
-            --text-light: #ffffff;
-            --status-gray: #8e8e93;
-            --status-blue: #34c759;
-        }
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        }
-        body {
-            background-color: var(--bg-light);
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-        }
-        .mobile-container {
-            width: 100%;
-            max-width: 480px;
-            background: #ffffff;
+        /* Mise en page de Messages sur iOS : liste des conversations OU conversation */
+        body { font-size: 17px; }
+        .auth { padding-top: max(32px, env(safe-area-inset-top)); }
+
+        #chatView { height: 100dvh; display: flex; flex-direction: column; }
+        body.in-conversation aside { display: none; }
+        body:not(.in-conversation) main { display: none; }
+
+        /* --- Liste des conversations --- */
+        aside {
+            flex: 1;
             display: flex;
             flex-direction: column;
-            height: 100vh;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
-        }
-        header {
-            background: #f8f8f8;
-            border-bottom: 1px solid #d1d1d6;
-            padding: 12px 16px;
-        }
-        .header-title {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 16px;
-            font-weight: 600;
-        }
-        .badge {
-            font-size: 11px;
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-weight: 500;
-        }
-        .badge-offline { background: #ff3b30; color: white; }
-        .badge-online { background: #34c759; color: white; }
-
-        .settings-panel {
-            background: #fdfdfd;
-            border-bottom: 1px solid #e5e5ea;
-            padding: 10px 16px;
-            font-size: 13px;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-        .settings-row {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-        .settings-row input {
-            flex: 1;
-            padding: 6px 10px;
-            border: 1px solid #d1d1d6;
-            border-radius: 6px;
-            font-size: 12px;
-        }
-        .btn {
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 6px 12px;
-            font-size: 12px;
-            font-weight: 500;
-            cursor: pointer;
-        }
-        .btn-secondary {
-            background: #8e8e93;
-        }
-
-        .chat-body {
-            flex: 1;
+            min-height: 0;
             overflow-y: auto;
-            padding: 16px;
+            padding: max(10px, env(safe-area-inset-top)) 0 env(safe-area-inset-bottom);
+        }
+        .top-bar { display: flex; padding: 4px 16px; }
+        .large-title { margin: 8px 16px 2px; font-size: 34px; font-weight: 700; letter-spacing: 0.3px; }
+        .me-line { margin: 0 16px 10px; font-size: 13px; color: var(--secondary); }
+        #meLabel { color: var(--text); font-weight: 600; }
+
+        .contact {
+            display: grid;
+            grid-template-columns: 12px auto 1fr auto;
+            align-items: center;
+            width: 100%;
+            padding: 0 16px 0 4px;
+            border: 0;
+            background: none;
+            text-align: left;
+        }
+        .contact:active { background: var(--bubble-received); }
+        .contact .avatar { width: 46px; height: 46px; margin: 0 12px 0 6px; font-size: 18px; }
+        .row-text {
             display: flex;
             flex-direction: column;
-            gap: 8px;
-            background: #f2f2f7;
-        }
-        .bubble {
-            max-width: 75%;
-            padding: 8px 12px;
-            border-radius: 16px;
-            font-size: 14px;
-            line-height: 1.35;
-            position: relative;
-            word-wrap: break-word;
-        }
-        .bubble-sent {
-            align-self: flex-end;
-            background: var(--bubble-sent);
-            color: var(--text-light);
-            border-bottom-right-radius: 4px;
-        }
-        .bubble-received {
-            align-self: flex-start;
-            background: var(--bubble-received);
-            color: var(--text-dark);
-            border-bottom-left-radius: 4px;
-        }
-        .meta-info {
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            gap: 4px;
-            margin-top: 4px;
-            font-size: 10px;
-            opacity: 0.8;
-        }
-        .status-check {
-            font-weight: bold;
-        }
-        .status-read {
-            color: #5ac8fa;
-        }
-
-        .typing-indicator {
-            font-size: 11px;
-            font-style: italic;
-            color: var(--status-gray);
-            height: 16px;
-            margin-bottom: 4px;
-            padding-left: 8px;
-        }
-
-        footer {
-            background: #f8f8f8;
-            border-top: 1px solid #d1d1d6;
-            padding: 8px 12px;
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-        footer input {
-            flex: 1;
-            padding: 10px 14px;
-            border: 1px solid #d1d1d6;
-            border-radius: 20px;
-            font-size: 14px;
-            outline: none;
-        }
-        footer button {
-            background: var(--primary);
-            color: white;
-            border: none;
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            cursor: pointer;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
+            min-width: 0;
+            padding: 14px 0;
+            border-bottom: 0.5px solid var(--separator);
+            align-self: stretch;
             justify-content: center;
         }
+        .row-text .name { font-weight: 600; font-size: 17px; }
+        .row-text .presence { font-size: 15px; }
+        .contact .chevron {
+            align-self: stretch;
+            display: flex;
+            align-items: center;
+            padding-left: 6px;
+            border-bottom: 0.5px solid var(--separator);
+            color: var(--disabled);
+            font-size: 22px;
+        }
+        .unread-dot { width: 10px; height: 10px; border-radius: 50%; justify-self: end; }
+        .unread-dot.visible { background: var(--blue); }
+
+        .journal { margin-top: auto; padding: 16px; }
+
+        /* --- Conversation --- */
+        main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+        #emptyState { display: none; }
+        #conversation { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+        .conv-header {
+            display: grid;
+            grid-template-columns: 52px 1fr 52px;
+            align-items: start;
+            padding: max(8px, env(safe-area-inset-top)) 8px 4px;
+        }
+        #btnBack { margin-top: 14px; color: var(--blue); }
+        #btnBack svg { width: 20px; height: 20px; }
+        .contact-header { justify-self: center; }
+        .contact-header .avatar { width: 50px; height: 50px; font-size: 19px; }
+
+        /* Le fil défile sous l'en-tête flouté */
+        #thread { padding: calc(max(8px, env(safe-area-inset-top)) + 104px) 16px 12px; }
+
+        /* Fiche du contact : feuille plein écran qui monte, comme sur iOS */
+        #infoPanel {
+            position: fixed;
+            inset: 0;
+            z-index: 10;
+            padding-top: max(14px, env(safe-area-inset-top));
+            padding-bottom: max(24px, env(safe-area-inset-bottom));
+            animation: sheet-up 0.28s ease-out;
+        }
+        #btnCloseInfo { top: max(12px, env(safe-area-inset-top)); left: 16px; }
+        @keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+        .msg { max-width: 75%; }
+        .composer { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+        .composer-field { min-height: 38px; }
+        #btnSend { width: 30px; height: 30px; }
     </style>
 </head>
 <body>
-    <div class="mobile-container">
-        <header>
-            <div class="header-title">
-                <span>📱 Messagerie (Mobile)</span>
-                <span id="connectionBadge" class="badge badge-offline">Déconnecté</span>
+    <!-- 1. Connexion / création de compte (REST) -->
+    <section id="authView" class="auth">
+        <div class="app-icon" aria-hidden="true">
+            <svg viewBox="0 0 48 48"><path fill="#fff" d="M24 7C13.5 7 5 14.2 5 23.1c0 5 2.7 9.5 7 12.5-.3 2.6-1.6 4.9-3.4 6.5 3.7-.2 7-1.6 9.4-3.8 1.9.5 3.9.8 6 .8 10.5 0 19-7.2 19-16S34.5 7 24 7z"/></svg>
+        </div>
+        <h1>Messages</h1>
+        <p class="subtitle">Client mobile — connectez-vous ou créez un compte.</p>
+        <form id="authForm">
+            <div class="form-group">
+                <div class="form-row">
+                    <label for="username">Utilisateur</label>
+                    <input id="username" required minlength="3" maxlength="50" autocomplete="username" autocapitalize="none" placeholder="bob">
+                </div>
+                <div class="form-row">
+                    <label for="password">Mot de passe</label>
+                    <input id="password" type="password" required minlength="4" autocomplete="current-password" placeholder="Requis">
+                </div>
+                <div class="form-row">
+                    <label for="server">Serveur</label>
+                    <input id="server" required inputmode="url" autocapitalize="none">
+                </div>
             </div>
-        </header>
+            <p class="form-footnote">Pas encore de compte ? Remplissez les champs puis « Créer un compte ».</p>
+            <button id="btnLogin" class="btn-primary" type="submit">Se connecter</button>
+            <button id="btnRegister" class="btn-plain" type="submit">Créer un compte</button>
+            <p id="authMessage"></p>
+        </form>
+    </section>
 
-        <section class="settings-panel">
-            <div class="settings-row">
-                <input id="serverHost" type="text" placeholder="Hôte (ex: localhost:8000)" value="localhost:8000">
-                <button id="btnToggleConnect" class="btn">Connecter</button>
+    <!-- 2. Messagerie -->
+    <section id="chatView" hidden>
+        <aside>
+            <div class="top-bar">
+                <button id="btnLogout" class="glass">Déconnexion</button>
             </div>
-            <div class="settings-row">
-                <input id="userToken" type="text" placeholder="Jeton JWT de votre compte">
+            <h1 class="large-title">Messages</h1>
+            <p class="me-line"><span id="meLabel"></span> · <span id="wsStatus" class="ws-status"></span></p>
+            <ul id="userList"></ul>
+            <details class="journal">
+                <summary>Journal REST / WebSocket</summary>
+                <ol id="log" reversed></ol>
+            </details>
+        </aside>
+
+        <main>
+            <p id="emptyState"></p>
+            <div id="conversation" hidden>
+                <header class="conv-header conv-bar">
+                    <button id="btnBack" class="glass round" aria-label="Retour aux conversations">
+                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12.5 3.5L6 10l6.5 6.5"/></svg>
+                    </button>
+                    <button id="btnContactInfo" class="contact-header" aria-controls="infoPanel" aria-expanded="false" title="Informations sur le contact">
+                        <span id="contactAvatar" class="avatar"></span>
+                        <span class="glass"><span id="contactName"></span><span class="chev">›</span></span>
+                        <span id="contactPresence" class="presence"></span>
+                    </button>
+                </header>
+                <div id="thread">
+                    <ul id="messages"></ul>
+                    <div id="typing" class="typing" hidden><span></span><span></span><span></span></div>
+                </div>
+                <p id="composerError"></p>
+                <form id="sendForm" class="composer">
+                    <div class="composer-field">
+                        <input id="messageInput" placeholder="Message" autocomplete="off" maxlength="5000">
+                        <button id="btnSend" type="submit" aria-label="Envoyer">
+                            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 12V2M2.5 6.5L7 2l4.5 4.5"/></svg>
+                        </button>
+                    </div>
+                </form>
             </div>
-            <div class="settings-row">
-                <input id="targetUserId" type="number" placeholder="ID Destinataire (ex: 2)" value="2">
-                <button id="btnLoadHistory" class="btn btn-secondary">Historique REST</button>
+        </main>
+
+        <section id="infoPanel" aria-label="Informations sur le contact" hidden>
+            <button id="btnCloseInfo" class="glass round" aria-label="Fermer">
+                <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 2l10 10M12 2L2 12"/></svg>
+            </button>
+            <div class="info-head">
+                <span id="infoAvatar" class="avatar"></span>
+                <h2 id="infoName"></h2>
+                <span id="infoPresence" class="presence"></span>
             </div>
+            <div id="infoBody"></div>
         </section>
-
-        <main id="chatBody" class="chat-body"></main>
-
-        <div id="typingIndicator" class="typing-indicator"></div>
-
-        <footer>
-            <input id="messageInput" type="text" placeholder="Message..." disabled>
-            <button id="btnSend" disabled>➤</button>
-        </footer>
-    </div>
+    </section>
 
     <script type="module">
-        import { ChatWebSocketClient, fetchMessageHistory } from "../common/api.js";
-
-        const badge = document.getElementById("connectionBadge");
-        const btnToggleConnect = document.getElementById("btnToggleConnect");
-        const btnLoadHistory = document.getElementById("btnLoadHistory");
-        const btnSend = document.getElementById("btnSend");
-        const messageInput = document.getElementById("messageInput");
-        const serverHostInput = document.getElementById("serverHost");
-        const userTokenInput = document.getElementById("userToken");
-        const targetUserIdInput = document.getElementById("targetUserId");
-        const chatBody = document.getElementById("chatBody");
-        const typingIndicator = document.getElementById("typingIndicator");
-
-        const client = new ChatWebSocketClient();
-        let typingTimeout = null;
-
-        function getStatusIcon(statut) {
-            if (statut === "lu") return `<span class="status-check status-read">✓✓</span>`;
-            if (statut === "livre") return `<span class="status-check">✓✓</span>`;
-            return `<span class="status-check">✓</span>`;
-        }
-
-        function appendMessage(item, isSent) {
-            const bubble = document.createElement("div");
-            bubble.className = `bubble ${isSent ? "bubble-sent" : "bubble-received"}`;
-            bubble.dataset.id = item.id;
-
-            const timeStr = item.dateEnvoi ? new Date(item.dateEnvoi).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
-            const statusHtml = isSent ? getStatusIcon(item.statut) : "";
-
-            bubble.innerHTML = `
-                <div>${escapeHtml(item.contenu)}</div>
-                <div class="meta-info">
-                    <span>${timeStr}</span>
-                    ${statusHtml}
-                </div>
-            `;
-            chatBody.appendChild(bubble);
-            chatBody.scrollTop = chatBody.scrollHeight;
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement("div");
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        btnToggleConnect.addEventListener("click", () => {
-            if (client.isConnected()) {
-                client.disconnect();
-                return;
-            }
-
-            const host = serverHostInput.value.trim();
-            const token = userTokenInput.value.trim();
-            if (!token) {
-                alert("Veuillez saisir votre jeton JWT");
-                return;
-            }
-
-            const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-            const wsBase = `${protocol}//${host}`;
-
-            client.connect(wsBase, token, {
-                onOpen: () => {
-                    badge.className = "badge badge-online";
-                    badge.textContent = "Connecté";
-                    btnToggleConnect.textContent = "Déconnecter";
-                    messageInput.disabled = false;
-                    btnSend.disabled = false;
-
-                    // Si on engage la conversation, signaler la lecture
-                    const targetId = Number(targetUserIdInput.value);
-                    if (targetId) client.sendRead(targetId);
-                },
-                onClose: (event) => {
-                    badge.className = "badge badge-offline";
-                    badge.textContent = event.code === 1008 ? "Refusé (1008)" : "Déconnecté";
-                    btnToggleConnect.textContent = "Connecter";
-                    messageInput.disabled = true;
-                    btnSend.disabled = true;
-                },
-                onError: () => {
-                    badge.className = "badge badge-offline";
-                    badge.textContent = "Erreur WS";
-                },
-                onMessage: (msg) => {
-                    const targetId = Number(targetUserIdInput.value);
-                    if (msg.expediteurId === targetId) {
-                        appendMessage(msg, false);
-                        // Accusé de lecture automatique pour les messages entrants
-                        client.sendRead(targetId);
-                    }
-                },
-                onAck: (ack) => {
-                    appendMessage(ack, true);
-                },
-                onReadAck: (readAck) => {
-                    // Mettre à jour l'affichage des coches bleues (statut 'lu')
-                    const bubbles = chatBody.querySelectorAll(".bubble-sent");
-                    bubbles.forEach(b => {
-                        const icon = b.querySelector(".status-check");
-                        if (icon) {
-                            icon.className = "status-check status-read";
-                            icon.textContent = "✓✓";
-                        }
-                    });
-                },
-                onTyping: (data) => {
-                    const targetId = Number(targetUserIdInput.value);
-                    if (data.expediteurId === targetId && data.isTyping) {
-                        typingIndicator.textContent = `L'utilisateur #${targetId} est en train d'écrire...`;
-                        clearTimeout(typingTimeout);
-                        typingTimeout = setTimeout(() => {
-                            typingIndicator.textContent = "";
-                        }, 2500);
-                    }
-                }
-            });
-        });
-
-        btnLoadHistory.addEventListener("click", async () => {
-            const host = serverHostInput.value.trim();
-            const token = userTokenInput.value.trim();
-            const targetId = Number(targetUserIdInput.value);
-            if (!token || !targetId) {
-                alert("Veuillez renseigner le token et l'ID du destinataire");
-                return;
-            }
-
-            const protocol = window.location.protocol === "https:" ? "https:" : "http:";
-            const apiBase = `${protocol}//${host}`;
-
-            try {
-                const history = await fetchMessageHistory(apiBase, token, targetId);
-                chatBody.innerHTML = "";
-                history.forEach(m => {
-                    const isSent = (m.destinataireId === targetId);
-                    appendMessage(m, isSent);
-                });
-            } catch (err) {
-                alert("Erreur lors de la récupération de l'historique : " + err.message);
-            }
-        });
-
-        function handleSend() {
-            const text = messageInput.value.trim();
-            const targetId = Number(targetUserIdInput.value);
-            if (!text || !targetId) return;
-
-            client.sendMessage(targetId, text);
-            messageInput.value = "";
-            client.sendTyping(targetId, false);
-        }
-
-        btnSend.addEventListener("click", handleSend);
-        messageInput.addEventListener("keydown", (e) => {
-            if (e.key === "Enter") handleSend();
-        });
-
-        messageInput.addEventListener("input", () => {
-            const targetId = Number(targetUserIdInput.value);
-            if (targetId && client.isConnected()) {
-                client.sendTyping(targetId, true);
-            }
+        import { initChat } from "../common/chat.js";
+        initChat({
+            onConversationOpened: () => document.body.classList.add("in-conversation"),
+            onConversationClosed: () => document.body.classList.remove("in-conversation"),
         });
     </script>
 </body>

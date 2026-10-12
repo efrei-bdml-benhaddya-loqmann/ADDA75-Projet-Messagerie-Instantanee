@@ -1,0 +1,33 @@
+meta {
+  name: POST Mauvais mot de passe 401
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/api/auth/login
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "username": "{{userA}}",
+    "motDePasse": "faux-mot-de-passe"
+  }
+}
+
+assert {
+  res.status: eq 401
+}
+
+tests {
+  test("Format d'erreur {detail, code}", function() {
+    expect(res.getBody()).to.have.property("detail");
+    expect(res.getBody()).to.have.property("code");
+  });
+}

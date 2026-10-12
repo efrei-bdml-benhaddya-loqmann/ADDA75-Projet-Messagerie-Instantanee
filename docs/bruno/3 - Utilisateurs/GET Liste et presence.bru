@@ -1,0 +1,33 @@
+meta {
+  name: GET Liste et presence
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/api/utilisateurs
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("Chaque utilisateur a id, username, connecte", function() {
+    res.getBody().forEach(u => expect(u).to.have.all.keys("id", "username", "connecte"));
+  });
+
+  test("Le compte B est listé", function() {
+    expect(res.getBody().map(u => u.id)).to.include(bru.getVar("userBId"));
+  });
+
+  test("Temps de réponse < 1000 ms", function() {
+    expect(res.getResponseTime()).to.be.below(1000);
+  });
+}

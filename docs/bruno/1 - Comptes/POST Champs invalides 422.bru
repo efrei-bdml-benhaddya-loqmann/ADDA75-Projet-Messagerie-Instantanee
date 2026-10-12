@@ -1,0 +1,38 @@
+meta {
+  name: POST Champs invalides 422
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/api/comptes
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "username": "a",
+    "motDePasse": ""
+  }
+}
+
+assert {
+  res.status: eq 422
+  res.body.code: eq VALIDATION_ERROR
+}
+
+tests {
+  test("Format d'erreur {detail, code}", function() {
+    expect(res.getBody()).to.have.property("detail");
+    expect(res.getBody()).to.have.property("code");
+  });
+
+  test("Détail par champ", function() {
+    expect(res.getBody().erreurs).to.be.an("array").that.is.not.empty;
+  });
+}

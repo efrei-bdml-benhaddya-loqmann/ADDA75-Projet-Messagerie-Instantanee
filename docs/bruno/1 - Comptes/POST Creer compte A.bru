@@ -1,0 +1,44 @@
+meta {
+  name: POST Creer compte A
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/api/comptes
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "username": "{{userA}}",
+    "motDePasse": "{{password}}"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+}
+
+script:pre-request {
+  // Noms uniques : la collection peut être rejouée sans erreur 409
+  const suffix = Date.now().toString().slice(-6);
+  bru.setVar("userA", "alice_" + suffix);
+  bru.setVar("userB", "bob_" + suffix);
+}
+
+script:post-response {
+  bru.setVar("userAId", res.getBody().id);
+}
+
+tests {
+  test("Renvoie id et username, jamais le mot de passe", function() {
+    expect(res.getBody()).to.have.all.keys("id", "username");
+  });
+}

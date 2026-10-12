@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "ADDA75 - Messagerie instantan\u00e9e",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}
