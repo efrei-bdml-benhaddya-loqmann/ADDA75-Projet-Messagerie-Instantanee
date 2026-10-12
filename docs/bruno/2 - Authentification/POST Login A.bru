@@ -1,0 +1,37 @@
+meta {
+  name: POST Login A
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/api/auth/login
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "username": "{{userA}}",
+    "motDePasse": "{{password}}"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.tokenType: eq bearer
+}
+
+script:post-response {
+  bru.setVar("token", res.getBody().token);
+}
+
+tests {
+  test("Le jeton est un JWT (3 parties)", function() {
+    expect(res.getBody().token.split(".")).to.have.lengthOf(3);
+  });
+}

@@ -1,0 +1,26 @@
+meta {
+  name: GET Sans jeton 401
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/utilisateurs
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 401
+}
+
+tests {
+  test("Format d'erreur {detail, code}", function() {
+    expect(res.getBody()).to.have.property("detail");
+    expect(res.getBody()).to.have.property("code");
+  });
+
+  test("En-tête WWW-Authenticate: Bearer", function() {
+    expect(res.getHeader("www-authenticate")).to.equal("Bearer");
+  });
+}

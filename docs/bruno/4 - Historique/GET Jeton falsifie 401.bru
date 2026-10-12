@@ -1,0 +1,19 @@
+meta {
+  name: GET Jeton falsifie 401
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/api/messages/{{userBId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}x
+}
+
+assert {
+  res.status: eq 401
+}
