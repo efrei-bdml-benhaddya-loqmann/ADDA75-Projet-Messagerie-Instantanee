@@ -18,7 +18,7 @@
 | Tests | `pytest` + `TestClient` FastAPI (gère aussi les WebSocket) | Automatiser ce qu'on testerait à la main dans Postman |
 | Qualité | `ruff` (lint + format) | Même style de code pour nous deux |
 | Clients | 2 pages HTML/JS vanilla (`desktop/`, `mobile/`) + `common/api.js` partagé | Le front n'est pas noté sur le design |
-| Bonus | **Accusé de réception** (principal) **+** rate limiting **+** Swagger | L'accusé de réception prouve la maîtrise du WebSocket (critère à 5 pts) et illustre la réponse à la question « destinataire hors ligne » (`envoye` tant qu'il n'est pas livré). Le rate limiting réutilise le TP4. Swagger est quasi gratuit avec FastAPI, donc on ne compte pas dessus seul |
+| Bonus | **Accusé de réception** (principal) **+** indicateur de saisie **+** notification hors ligne (webhook simulé) **+** rate limiting **+** Swagger | L'accusé de réception prouve la maîtrise du WebSocket (critère à 5 pts) et illustre la réponse à la question « destinataire hors ligne » (`envoye` tant qu'il n'est pas livré). Le rate limiting réutilise le TP4. Swagger est quasi gratuit avec FastAPI, donc on ne compte pas dessus seul |
 
 ### Points d'attention propres à Python/FastAPI
 - **JSON en camelCase, code en snake_case** : l'énoncé impose `expediteurId`, `dateEnvoi`, `motDePasse`. On écrit `expediteur_id` en Python et on configure les schémas Pydantic avec `alias_generator=to_camel` + `populate_by_name=True`.
@@ -39,19 +39,21 @@ P1/
 │   ├── .env.example                 JWT_SECRET, DATABASE_URL…
 │   ├── app/
 │   │   ├── main.py                  création de l'app, inclusion des routers
-│   │   ├── core/                    config.py, database.py, errors.py      (commun)
+│   │   ├── core/                    config.py, database.py, errors.py, rate_limit.py      (commun)
 │   │   ├── users/                   models.py, schemas.py, service.py, router.py   (A)
 │   │   ├── auth/                    security.py (hash + JWT), deps.py (get_current_user), router.py   (A)
 │   │   ├── messages/                models.py, schemas.py, service.py, router.py   (B)
-│   │   └── realtime/                manager.py (connexions + présence), router.py (/ws/messages)   (B)
+│   │   └── realtime/                manager.py (connexions + présence), router.py (/ws/messages), notifications.py (webhook simulé)   (B)
 │   └── tests/                       test_accounts.py, test_auth.py, test_messages.py, test_ws.py
 ├── clients/
 │   ├── common/api.js                appels REST + connexion WS
+│   ├── common/chat.js               logique d'interface partagée par les deux clients
 │   ├── desktop/                     page « bureau »   (A)
 │   └── mobile/                      page « mobile »   (B)
 ├── docs/
 │   ├── rapport/                     rapport 5–8 pages
-│   └── postman/                     collection Postman (REST + WS)
+│   ├── bruno/                       collection Bruno (REST + tests)
+│   └── postman/                     export Postman de la même collection
 └── README.md                        comment lancer le projet
 ```
 
@@ -97,22 +99,26 @@ class ConnectionManager:
 
 Répartition validée le 2026-09-23.
 
+> **État au 2026-10-12** — [x] = mergé sur `main`. Les éléments marqués « ✅ fait sur
+> `fix/validation-projet` » sont terminés et testés sur cette branche, mais pas encore relus ni
+> mergés : la case sera cochée après la relecture de la PR.
+
 Principe : **chacun possède un domaine backend complet** (modèle → service → route → tests), et **chacun relit toutes les PR de l'autre**. En soutenance, les deux doivent pouvoir expliquer tout le projet.
 
 ### 👤 Binôme (A) — Identité & sécurité
 Barème : API REST (3) + JWT (3) + une partie de l'architecture (4) et du bonus (2).
 
-- [ ] Modèle `User` (username unique, `password_hash`)
-- [ ] `POST /api/comptes` : hachage, `409` si doublon, validation Pydantic
-- [ ] `POST /api/auth/login` : vérification, génération du JWT, `401` si échec
-- [ ] `security.py` + `get_current_user` (401 garanti)
-- [ ] `GET /api/utilisateurs` avec `connecte` via `ConnectionManager.is_online`
-- [ ] Format d'erreur JSON homogène (`core/errors.py`)
-- [ ] Tests pytest : comptes, login, 401 sans token / token expiré / token falsifié
-- [ ] Bonus **rate limiting** : module `core/rate_limit.py` (fenêtre glissante par utilisateur) utilisé par B dans le handler WS + sur `/api/auth/login` (anti brute-force)
-- [ ] Bonus **Swagger** soigné : bouton « Authorize » JWT, exemples, descriptions
-- [ ] Client **desktop** + partie REST de `common/api.js` (inscription, login, liste utilisateurs, historique)
-- [ ] Rapport : schéma d'architecture, **question REST vs WebSocket pour l'historique**, choix sécurité
+- [x] Modèle `User` (username unique, `password_hash`)
+- [x] `POST /api/comptes` : hachage, `409` si doublon, validation Pydantic
+- [x] `POST /api/auth/login` : vérification, génération du JWT, `401` si échec
+- [x] `security.py` + `get_current_user` (401 garanti)
+- [x] `GET /api/utilisateurs` avec `connecte` via `ConnectionManager.is_online`
+- [ ] Format d'erreur JSON homogène (`core/errors.py`) — base sur `main`, 404/422 harmonisés — ✅ fait sur `fix/validation-projet` (PR à relire)
+- [x] Tests pytest : comptes, login, 401 sans token / token expiré / token falsifié
+- [ ] Bonus **rate limiting** : module `core/rate_limit.py` (fenêtre glissante par utilisateur) utilisé par B dans le handler WS + sur `/api/auth/login` (anti brute-force) — ✅ fait sur `fix/validation-projet` (PR à relire)
+- [ ] Bonus **Swagger** soigné : bouton « Authorize » JWT, exemples, descriptions — ✅ fait sur `fix/validation-projet` (PR à relire)
+- [ ] Client **desktop** + partie REST de `common/api.js` (inscription, login, liste utilisateurs, historique) — ✅ fait sur `fix/validation-projet` (PR à relire)
+- [ ] Rapport : schéma d'architecture, **question REST vs WebSocket pour l'historique**, choix sécurité — ✅ fait sur `fix/validation-projet` (PR à relire)
 
 ### 👤 Loqmann (B) — Messages & temps réel
 Barème : WebSocket (5) + persistance (2) + une partie de l'architecture (4) et du bonus (2).
@@ -129,14 +135,16 @@ Barème : WebSocket (5) + persistance (2) + une partie de l'architecture (4) et 
 - [x] Tests pytest : WS refusé sans token, message A → B reçu, message persisté
 - [x] Bonus **accusé de réception** (`envoye` / `livre` / `lu`)
 - [x] Client **mobile** + partie WebSocket de `common/api.js` (connexion, envoi, réception)
+- [ ] Correctifs de validation : reconnexion rapide (`disconnect`), destinataire inconnu, trame non JSON, code 1008 reçu par le navigateur, `delivered_ack` à la reconnexion — ✅ fait sur `fix/validation-projet` (PR à relire)
+- [ ] Bonus **notification hors ligne** (webhook simulé dans les logs, `realtime/notifications.py`) — ✅ fait sur `fix/validation-projet` (PR à relire)
 - [x] Rapport : **question destinataire hors ligne (lien avec Kafka)**, difficultés du temps réel
 
 ### 👥 Ensemble
 - [ ] Étape 0 : valider ce document, écrire les contrats (section 2) en stubs
-- [ ] Collection Postman commune (REST + WebSocket)
-- [ ] Test réel : 2 machines sur le même réseau (`uvicorn --host 0.0.0.0`, CORS configuré)
-- [ ] README (installation `uv sync`, lancement backend, ouverture des clients)
-- [ ] Répétition du scénario de démo §2.1 + captures d'écran pour le rapport
+- [ ] Collection commune : Bruno (`docs/bruno/`, 11 requêtes testées) + export Postman ; WebSocket documenté dans le README — ✅ fait sur `fix/validation-projet` (PR à relire)
+- [ ] Test réel : 2 machines sur le même réseau (`uvicorn --host 0.0.0.0`, CORS configuré) — scénario validé sur une machine avec les deux clients ; reste à le faire sur deux appareils physiques
+- [ ] README (installation `uv sync`, lancement backend, ouverture des clients) — ✅ fait sur `fix/validation-projet` (PR à relire)
+- [ ] Répétition du scénario de démo §2.1 + captures d'écran pour le rapport (à placer dans `docs/rapport/captures/demo.png`)
 - [ ] Relecture croisée du rapport
 
 ## 4. Ordre des étapes (suit le §7 de l'énoncé)
