@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Messagerie — Client Bureau</title>
+    <style>
+        * { box-sizing: border-box; }
+        [hidden] { display: none !important; }
+        body { margin: 0; font-family: system-ui, sans-serif; background: #f4f4f4; color: #222; }
+        h1 { font-size: 18px; margin: 0; }
+        h2 { font-size: 15px; margin: 0 0 8px; }
+        input, button { font: inherit; padding: 6px 10px; }
+        button { cursor: pointer; }
+        .error { color: #c62828; }
+        .online { color: #2e7d32; }
+        .hint { color: #777; font-size: 13px; }
+
+        /* Connexion */
+        #authView { max-width: 420px; margin: 60px auto; background: #fff; padding: 24px; border: 1px solid #ddd; }
+        #authForm label { display: block; margin-top: 10px; font-size: 13px; }
+        #authForm input { width: 100%; }
+        .actions { display: flex; gap: 8px; margin-top: 16px; }
+
+        /* Messagerie : contacts à gauche, conversation à droite */
+        #chatView { height: 100vh; display: grid; grid-template-rows: auto 1fr auto; }
+        #chatView > header { display: flex; align-items: center; gap: 16px; padding: 10px 16px; background: #fff; border-bottom: 1px solid #ddd; }
+        #chatView > header .spacer { flex: 1; }
+        .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 0; }
+        aside { background: #fff; border-right: 1px solid #ddd; padding: 12px; overflow-y: auto; }
+        #userList { list-style: none; margin: 0; padding: 0; }
+        .contact { width: 100%; display: flex; align-items: center; gap: 8px; border: 1px solid transparent; background: none; text-align: left; }
+        .contact:hover { background: #f0f0f0; }
+        .contact.active { border-color: #1976d2; background: #e3f2fd; }
+        .contact .name { flex: 1; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; background: #bbb; }
+        .dot.online { background: #2e7d32; }
+        .unread { background: #c62828; color: #fff; border-radius: 10px; padding: 0 7px; font-size: 12px; }
+
+        main { display: flex; flex-direction: column; min-height: 0; }
+        #emptyState { margin: auto; color: #777; }
+        #conversation { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+        #conversation > header { padding: 10px 16px; background: #fff; border-bottom: 1px solid #ddd; }
+        #messages { list-style: none; margin: 0; padding: 16px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+        .msg { max-width: 60%; padding: 6px 10px; border-radius: 8px; white-space: pre-wrap; word-wrap: break-word; }
+        .msg.mine { align-self: flex-end; background: #1976d2; color: #fff; }
+        .msg.theirs { align-self: flex-start; background: #fff; border: 1px solid #ddd; }
+        .meta { font-size: 11px; opacity: .8; margin-top: 2px; text-align: right; }
+        .status[data-statut="lu"] { font-weight: bold; }
+        #typing, #composerError { margin: 0 16px; min-height: 18px; font-size: 13px; }
+        #typing { color: #777; font-style: italic; }
+        #sendForm { display: flex; gap: 8px; padding: 10px 16px; background: #fff; border-top: 1px solid #ddd; }
+        #messageInput { flex: 1; }
+
+        details { background: #fff; border-top: 1px solid #ddd; padding: 6px 16px; font-size: 12px; }
+        #log { max-height: 120px; overflow-y: auto; margin: 6px 0 0; padding-left: 18px; }
+    </style>
+</head>
+<body>
+    <!-- 1. Connexion / création de compte (REST) -->
+    <section id="authView">
+        <h1>💻 Messagerie — Bureau</h1>
+        <form id="authForm">
+            <label>Serveur <input id="server" required></label>
+            <label>Nom d'utilisateur <input id="username" required minlength="3" maxlength="50" autocomplete="username"></label>
+            <label>Mot de passe <input id="password" type="password" required minlength="4" autocomplete="current-password"></label>
+            <div class="actions">
+                <button id="btnLogin" type="submit">Se connecter</button>
+                <button id="btnRegister" type="submit">Créer un compte</button>
+            </div>
+            <p id="authMessage"></p>
+        </form>
+        <p class="hint">
+            Démo : connectez-vous ici avec l'utilisateur 1, et sur le téléphone
+            (<code>/clients/mobile/</code>) avec l'utilisateur 2, puis choisissez le contact.
+        </p>
+    </section>
+
+    <!-- 2. Messagerie -->
+    <section id="chatView" hidden>
+        <header>
+            <h1>💻 Messagerie</h1>
+            <span>Connecté en tant que <strong id="meLabel"></strong></span>
+            <span id="wsStatus"></span>
+            <span class="spacer"></span>
+            <button id="btnLogout">Se déconnecter</button>
+        </header>
+
+        <div class="layout">
+            <aside>
+                <h2>Contacts</h2>
+                <ul id="userList"></ul>
+                <p class="hint">Présence rafraîchie toutes les 5 s (GET /api/utilisateurs).</p>
+                <p class="hint">Statuts : ✓ envoyé (stocké sur le serveur) · ✓✓ livré · <b>✓✓ lu</b></p>
+            </aside>
+
+            <main>
+                <p id="emptyState">← Choisissez un contact pour afficher la conversation.</p>
+                <div id="conversation" hidden>
+                    <header><strong id="contactName"></strong> — <span id="contactPresence"></span></header>
+                    <ul id="messages"></ul>
+                    <p id="typing"></p>
+                    <p id="composerError" class="error"></p>
+                    <form id="sendForm">
+                        <input id="messageInput" placeholder="Écrire un message…" autocomplete="off" maxlength="5000">
+                        <button id="btnSend" type="submit">Envoyer</button>
+                    </form>
+                </div>
+            </main>
+        </div>
+
+        <details>
+            <summary>Journal des échanges (REST / WebSocket)</summary>
+            <ol id="log" reversed></ol>
+        </details>
+    </section>
+
+    <script type="module">
+        import { initChat } from "../common/chat.js";
+        initChat();
+    </script>
+</body>
+</html>

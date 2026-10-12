@@ -5,8 +5,49 @@
  * Spécifications : ROADMAP.md (§1 et §2)
  */
 
-// TODO: Fonctions d'inscription (POST /api/comptes) et de connexion (POST /api/auth/login) à implémenter par Binôme A.
-// TODO: Consultation de la liste des utilisateurs (GET /api/utilisateurs) à implémenter par Binôme A.
+/**
+ * Erreur renvoyée par l'API REST, avec le statut HTTP (401, 409, 422, 429…).
+ */
+export class ApiError extends Error {
+    constructor(status, body) {
+        // Format d'erreur du serveur : {detail, code, erreurs?}
+        const details = (body.erreurs || []).map((e) => `${e.champ} : ${e.message}`);
+        super([body.detail || `Erreur HTTP ${status}`, ...details].join(" — "));
+        this.status = status;
+        this.code = body.code;
+    }
+}
+
+async function request(apiBaseUrl, path, { method = "GET", token, body } = {}) {
+    const headers = { "Accept": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    if (body !== undefined) headers["Content-Type"] = "application/json";
+
+    const response = await fetch(`${apiBaseUrl.replace(/\/+$/, "")}${path}`, {
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!response.ok) {
+        throw new ApiError(response.status, await response.json().catch(() => ({})));
+    }
+    return response.json();
+}
+
+/** POST /api/comptes : crée un compte. Renvoie {id, username}. */
+export function register(apiBaseUrl, username, motDePasse) {
+    return request(apiBaseUrl, "/api/comptes", { method: "POST", body: { username, motDePasse } });
+}
+
+/** POST /api/auth/login : renvoie {token, tokenType}. */
+export function login(apiBaseUrl, username, motDePasse) {
+    return request(apiBaseUrl, "/api/auth/login", { method: "POST", body: { username, motDePasse } });
+}
+
+/** GET /api/utilisateurs : renvoie [{id, username, connecte}]. */
+export function fetchUsers(apiBaseUrl, token) {
+    return request(apiBaseUrl, "/api/utilisateurs", { token });
+}
 
 /**
  * Récupère l'historique des messages échangés avec un utilisateur via l'API REST.
@@ -16,22 +57,8 @@
  * @param {number} targetUserId - Identifiant de l'interlocuteur
  * @returns {Promise<Array>} Liste des messages ordonnés par date
  */
-export async function fetchMessageHistory(apiBaseUrl, token, targetUserId) {
-    const url = `${apiBaseUrl.replace(/\/+$/, "")}/api/messages/${targetUserId}`;
-    const response = await fetch(url, {
-        method: "GET",
-        headers: {
-            "Authorization": `Bearer ${token}`,
-            "Accept": "application/json",
-        },
-    });
-
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Erreur HTTP ${response.status}`);
-    }
-
-    return response.json();
+export function fetchMessageHistory(apiBaseUrl, token, targetUserId) {
+    return request(apiBaseUrl, `/api/messages/${targetUserId}`, { token });
 }
 
 /**
@@ -53,7 +80,7 @@ export class ChatWebSocketClient {
      *
      * @param {string} wsBaseUrl - URL WS du backend (ex: "ws://localhost:8000")
      * @param {string} token - Jeton JWT Bearer
-     * @param {object} callbacks - Gestionnaires d'événements ({ onOpen, onClose, onError, onMessage, onAck, onReadAck, onTyping })
+     * @param {object} callbacks - Gestionnaires d'événements ({ onOpen, onClose, onError, onMessage, onAck, onDeliveredAck, onReadAck, onTyping, onServerError })
      */
     connect(wsBaseUrl, token, callbacks = {}) {
         this.callbacks = callbacks;
@@ -61,22 +88,27 @@ export class ChatWebSocketClient {
         const cleanUrl = wsBaseUrl.replace(/\/+$/, "");
         const wsUrl = `${cleanUrl}/ws/messages?token=${encodeURIComponent(token)}`;
 
-        this.ws = new WebSocket(wsUrl);
+        const socket = new WebSocket(wsUrl);
+        this.ws = socket;
+        // Après disconnect() ou une reconnexion, les événements tardifs de l'ancienne
+        // socket sont ignorés
+        const isCurrent = () => this.ws === socket;
 
-        this.ws.onopen = (event) => {
-            if (this.callbacks.onOpen) this.callbacks.onOpen(event);
+        socket.onopen = (event) => {
+            if (isCurrent() && this.callbacks.onOpen) this.callbacks.onOpen(event);
         };
 
-        this.ws.onclose = (event) => {
+        socket.onclose = (event) => {
             // Le code 1008 indique un refus d'authentification par le serveur
-            if (this.callbacks.onClose) this.callbacks.onClose(event);
+            if (isCurrent() && this.callbacks.onClose) this.callbacks.onClose(event);
         };
 
-        this.ws.onerror = (event) => {
-            if (this.callbacks.onError) this.callbacks.onError(event);
+        socket.onerror = (event) => {
+            if (isCurrent() && this.callbacks.onError) this.callbacks.onError(event);
         };
 
-        this.ws.onmessage = (event) => {
+        socket.onmessage = (event) => {
+            if (!isCurrent()) return;
             try {
                 const data = JSON.parse(event.data);
                 switch (data.type) {
@@ -86,11 +118,17 @@ export class ChatWebSocketClient {
                     case "ack":
                         if (this.callbacks.onAck) this.callbacks.onAck(data);
                         break;
+                    case "delivered_ack":
+                        if (this.callbacks.onDeliveredAck) this.callbacks.onDeliveredAck(data);
+                        break;
                     case "read_ack":
                         if (this.callbacks.onReadAck) this.callbacks.onReadAck(data);
                         break;
                     case "typing":
                         if (this.callbacks.onTyping) this.callbacks.onTyping(data);
+                        break;
+                    case "error":
+                        if (this.callbacks.onServerError) this.callbacks.onServerError(data);
                         break;
                     default:
                         if (this.callbacks.onUnknown) this.callbacks.onUnknown(data);
