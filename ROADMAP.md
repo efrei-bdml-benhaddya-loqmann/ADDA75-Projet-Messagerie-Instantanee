@@ -142,9 +142,9 @@ Barème : WebSocket (5) + persistance (2) + une partie de l'architecture (4) et 
 ### 👥 Ensemble
 - [ ] Étape 0 : valider ce document, écrire les contrats (section 2) en stubs
 - [ ] Collection commune : Bruno (`docs/bruno/`, 11 requêtes testées) + export Postman ; WebSocket documenté dans le README — ✅ fait sur `fix/validation-projet` (PR à relire)
-- [ ] Test réel : 2 machines sur le même réseau (`uvicorn --host 0.0.0.0`, CORS configuré) — scénario validé sur une machine avec les deux clients ; reste à le faire sur deux appareils physiques
+- [ ] Test réel : 2 machines sur le même réseau (`uvicorn --host 0.0.0.0`, CORS configuré) — ✅ validé le 2026-10-12 sur deux PC distincts sur le même Wi-Fi (PR à relire)
 - [ ] README (installation `uv sync`, lancement backend, ouverture des clients) — ✅ fait sur `fix/validation-projet` (PR à relire)
-- [ ] Répétition du scénario de démo §2.1 + captures d'écran pour le rapport (à placer dans `docs/rapport/captures/demo.png`)
+- [ ] Répétition du scénario de démo §2.1 + captures d'écran pour le rapport — scénario répété le 2026-10-12 ; capture à ajouter dans `docs/rapport/captures/demo.png`
 - [ ] Relecture croisée du rapport
 
 ## 4. Ordre des étapes (suit le §7 de l'énoncé)

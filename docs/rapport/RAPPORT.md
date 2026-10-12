@@ -335,7 +335,9 @@ bout de 3 secondes, suivie du rechargement de l'historique pour récupérer les 
 
 ### 7.2. Scénario de démonstration (§2.1 de l'énoncé)
 
-Le scénario a été rejoué de bout en bout avec les deux clients :
+Le scénario a été rejoué de bout en bout sur **deux PC distincts** connectés au même réseau Wi-Fi :
+le premier exécute le serveur (`uvicorn --host 0.0.0.0`) et le client bureau, le second ouvre le
+client mobile depuis son navigateur à l'adresse IP du premier.
 
 | Étape | Résultat observé |
 | :--- | :--- |
