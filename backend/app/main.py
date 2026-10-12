@@ -2,9 +2,11 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.staticfiles import StaticFiles
 
 # Import explicite des modèles pour que SQLAlchemy enregistre les tables dans Base.metadata
 import app.messages.models  # noqa: F401
@@ -53,7 +55,14 @@ app.include_router(messages_router)
 app.include_router(realtime_router)
 
 
+# Servir directement les clients statiques sur FastAPI (port 8000)
+_clients_dir = Path(__file__).resolve().parent.parent.parent / "clients"
+if _clients_dir.exists():
+    app.mount("/clients", StaticFiles(directory=str(_clients_dir), html=True), name="clients")
+
+
 @app.get("/health", tags=["monitoring"])
 def health() -> dict[str, str]:
     """GET /health : vérifie que le serveur tourne, renvoie {"status": "ok"}."""
     return {"status": "ok"}
+

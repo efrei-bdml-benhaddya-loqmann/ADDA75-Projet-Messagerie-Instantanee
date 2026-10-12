@@ -189,14 +189,20 @@
 
         <section class="settings-panel">
             <div class="settings-row">
-                <input id="serverHost" type="text" placeholder="Hôte (ex: localhost:8000)" value="localhost:8000">
+                <input id="serverHost" type="text" placeholder="Hôte (ex: 10.101.20.212:8000)">
                 <button id="btnToggleConnect" class="btn">Connecter</button>
             </div>
-            <div class="settings-row">
-                <input id="userToken" type="text" placeholder="Jeton JWT de votre compte">
+            <!-- Connexion rapide pour obtenir le token directement -->
+            <div class="settings-row" id="loginRow">
+                <input id="loginUsername" type="text" placeholder="Pseudo (ex: samy)">
+                <input id="loginPassword" type="password" placeholder="Mot de passe">
+                <button id="btnLogin" class="btn btn-secondary">Se connecter</button>
             </div>
             <div class="settings-row">
-                <input id="targetUserId" type="number" placeholder="ID Destinataire (ex: 2)" value="2">
+                <input id="userToken" type="text" placeholder="Jeton JWT (rempli automatiquement)">
+            </div>
+            <div class="settings-row">
+                <input id="targetUserId" type="number" placeholder="ID Destinataire (ex: 1)" value="1">
                 <button id="btnLoadHistory" class="btn btn-secondary">Historique REST</button>
             </div>
         </section>
@@ -216,6 +222,7 @@
 
         const badge = document.getElementById("connectionBadge");
         const btnToggleConnect = document.getElementById("btnToggleConnect");
+        const btnLogin = document.getElementById("btnLogin");
         const btnLoadHistory = document.getElementById("btnLoadHistory");
         const btnSend = document.getElementById("btnSend");
         const messageInput = document.getElementById("messageInput");
@@ -225,8 +232,58 @@
         const chatBody = document.getElementById("chatBody");
         const typingIndicator = document.getElementById("typingIndicator");
 
+        // Auto-détection intelligente de l'adresse du serveur
+        const currentHost = window.location.hostname && window.location.hostname !== "" ? window.location.hostname : "localhost";
+        serverHostInput.value = `${currentHost}:8000`;
+
         const client = new ChatWebSocketClient();
         let typingTimeout = null;
+
+        function getCleanHost() {
+            let h = serverHostInput.value.trim();
+            h = h.replace(/^https?:\/\//i, "").replace(/^wss?:\/\//i, "").replace(/\/+$/, "");
+            // Si l'utilisateur a renseigné le port 3000 (serveur web statique) au lieu de 8000 (FastAPI/WebSocket)
+            if (h.includes(":3000")) {
+                h = h.replace(":3000", ":8000");
+                serverHostInput.value = h;
+            } else if (!h.includes(":") && h !== "") {
+                h = `${h}:8000`;
+                serverHostInput.value = h;
+            }
+            return h;
+        }
+
+        function getCleanToken() {
+            let t = userTokenInput.value.trim();
+            return t.replace(/^Bearer\s+/i, "").replace(/^["']|["']$/g, "").trim();
+        }
+
+        // Connexion directe avec identifiants
+        btnLogin.addEventListener("click", async () => {
+            const host = getCleanHost();
+            const username = document.getElementById("loginUsername").value.trim();
+            const motDePasse = document.getElementById("loginPassword").value.trim();
+            if (!username || !motDePasse) {
+                alert("Veuillez saisir votre pseudo et mot de passe");
+                return;
+            }
+            try {
+                const res = await fetch(`http://${host}/api/auth/login`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username, motDePasse }),
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `Erreur HTTP ${res.status}`);
+                }
+                const data = await res.json();
+                userTokenInput.value = data.token;
+                alert(`Connexion réussie pour '${username}' ! Vous pouvez maintenant cliquer sur 'Connecter'.`);
+            } catch (err) {
+                alert("Erreur de connexion : " + err.message);
+            }
+        });
 
         function getStatusIcon(statut) {
             if (statut === "lu") return `<span class="status-check status-read">✓✓</span>`;
@@ -265,10 +322,10 @@
                 return;
             }
 
-            const host = serverHostInput.value.trim();
-            const token = userTokenInput.value.trim();
+            const host = getCleanHost();
+            const token = getCleanToken();
             if (!token) {
-                alert("Veuillez saisir votre jeton JWT");
+                alert("Veuillez saisir votre jeton JWT ou vous connecter ci-dessus");
                 return;
             }
 
@@ -289,7 +346,12 @@
                 },
                 onClose: (event) => {
                     badge.className = "badge badge-offline";
-                    badge.textContent = event.code === 1008 ? "Refusé (1008)" : "Déconnecté";
+                    if (event.code === 1008) {
+                        badge.textContent = "Refusé (1008)";
+                        alert("Connexion WebSocket refusée (Code 1008) :\nVotre jeton JWT est invalide ou expiré (durée max : 60 minutes).\nVeuillez régénérer un nouveau jeton via le bouton 'Se connecter'.");
+                    } else {
+                        badge.textContent = "Déconnecté";
+                    }
                     btnToggleConnect.textContent = "Connecter";
                     messageInput.disabled = true;
                     btnSend.disabled = true;
@@ -334,8 +396,8 @@
         });
 
         btnLoadHistory.addEventListener("click", async () => {
-            const host = serverHostInput.value.trim();
-            const token = userTokenInput.value.trim();
+            const host = getCleanHost();
+            const token = getCleanToken();
             const targetId = Number(targetUserIdInput.value);
             if (!token || !targetId) {
                 alert("Veuillez renseigner le token et l'ID du destinataire");
