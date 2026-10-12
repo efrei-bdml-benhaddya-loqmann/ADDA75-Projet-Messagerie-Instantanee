@@ -2,115 +2,190 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Messagerie — Client Mobile</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Messages — Client Mobile</title>
+    <link rel="stylesheet" href="../common/imessage.css">
     <style>
-        * { box-sizing: border-box; }
-        [hidden] { display: none !important; }
-        body { margin: 0; font-family: system-ui, sans-serif; background: #fff; color: #222; font-size: 16px; }
-        h1 { font-size: 18px; margin: 0; }
-        input, button { font: inherit; padding: 10px 12px; }
-        button { cursor: pointer; }
-        .error { color: #c62828; }
-        .online { color: #2e7d32; }
-        .hint { color: #777; font-size: 14px; }
+        /* Mise en page de Messages sur iOS : liste des conversations OU conversation */
+        body { font-size: 17px; }
+        .auth { padding-top: max(32px, env(safe-area-inset-top)); }
 
-        /* Connexion */
-        #authView { padding: 20px 16px; }
-        #authForm label { display: block; margin-top: 12px; font-size: 14px; }
-        #authForm input { width: 100%; }
-        .actions { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
-
-        /* Une seule colonne : liste des contacts OU conversation */
         #chatView { height: 100dvh; display: flex; flex-direction: column; }
-        #chatView > header { padding: 10px 16px; background: #1976d2; color: #fff; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
-        #chatView > header .spacer { flex: 1; }
-        #chatView > header button { padding: 6px 10px; }
-        #wsStatus { font-size: 13px; width: 100%; }
-        #wsStatus.online { color: #c8e6c9; }
-
-        aside { padding: 12px 16px; flex: 1; overflow-y: auto; }
         body.in-conversation aside { display: none; }
         body:not(.in-conversation) main { display: none; }
-        #userList { list-style: none; margin: 0; padding: 0; }
-        .contact { width: 100%; display: flex; align-items: center; gap: 10px; background: none; border: none; border-bottom: 1px solid #eee; text-align: left; padding: 14px 4px; }
-        .contact .name { flex: 1; font-weight: 500; }
-        .dot { width: 12px; height: 12px; border-radius: 50%; background: #bbb; }
-        .dot.online { background: #2e7d32; }
-        .unread { background: #c62828; color: #fff; border-radius: 10px; padding: 0 8px; font-size: 13px; }
 
+        /* --- Liste des conversations --- */
+        aside {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            overflow-y: auto;
+            padding: max(10px, env(safe-area-inset-top)) 0 env(safe-area-inset-bottom);
+        }
+        .top-bar { display: flex; padding: 4px 16px; }
+        .large-title { margin: 8px 16px 2px; font-size: 34px; font-weight: 700; letter-spacing: 0.3px; }
+        .me-line { margin: 0 16px 10px; font-size: 13px; color: var(--secondary); }
+        #meLabel { color: var(--text); font-weight: 600; }
+
+        .contact {
+            display: grid;
+            grid-template-columns: 12px auto 1fr auto;
+            align-items: center;
+            width: 100%;
+            padding: 0 16px 0 4px;
+            border: 0;
+            background: none;
+            text-align: left;
+        }
+        .contact:active { background: var(--bubble-received); }
+        .contact .avatar { width: 46px; height: 46px; margin: 0 12px 0 6px; font-size: 18px; }
+        .row-text {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            padding: 14px 0;
+            border-bottom: 0.5px solid var(--separator);
+            align-self: stretch;
+            justify-content: center;
+        }
+        .row-text .name { font-weight: 600; font-size: 17px; }
+        .row-text .presence { font-size: 15px; }
+        .contact .chevron {
+            align-self: stretch;
+            display: flex;
+            align-items: center;
+            padding-left: 6px;
+            border-bottom: 0.5px solid var(--separator);
+            color: var(--disabled);
+            font-size: 22px;
+        }
+        .unread-dot { width: 10px; height: 10px; border-radius: 50%; justify-self: end; }
+        .unread-dot.visible { background: var(--blue); }
+
+        .journal { margin-top: auto; padding: 16px; }
+
+        /* --- Conversation --- */
         main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
         #emptyState { display: none; }
-        #conversation { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-        #conversation > header { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid #ddd; }
-        #messages { list-style: none; margin: 0; padding: 12px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; background: #f4f4f4; }
-        .msg { max-width: 80%; padding: 8px 12px; border-radius: 14px; white-space: pre-wrap; word-wrap: break-word; }
-        .msg.mine { align-self: flex-end; background: #1976d2; color: #fff; }
-        .msg.theirs { align-self: flex-start; background: #fff; border: 1px solid #ddd; }
-        .meta { font-size: 11px; opacity: .8; margin-top: 2px; text-align: right; }
-        .status[data-statut="lu"] { font-weight: bold; }
-        #typing, #composerError { margin: 0 12px; min-height: 18px; font-size: 13px; }
-        #typing { color: #777; font-style: italic; }
-        #sendForm { display: flex; gap: 8px; padding: 8px 12px; border-top: 1px solid #ddd; }
-        #messageInput { flex: 1; min-width: 0; }
+        #conversation { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
-        details { border-top: 1px solid #ddd; padding: 6px 16px; font-size: 12px; }
-        #log { max-height: 100px; overflow-y: auto; margin: 6px 0 0; padding-left: 18px; }
+        .conv-header {
+            display: grid;
+            grid-template-columns: 52px 1fr 52px;
+            align-items: start;
+            padding: max(8px, env(safe-area-inset-top)) 8px 4px;
+        }
+        #btnBack { margin-top: 14px; color: var(--blue); }
+        #btnBack svg { width: 20px; height: 20px; }
+        .contact-header { justify-self: center; }
+        .contact-header .avatar { width: 50px; height: 50px; font-size: 19px; }
+
+        /* Le fil défile sous l'en-tête flouté */
+        #thread { padding: calc(max(8px, env(safe-area-inset-top)) + 104px) 16px 12px; }
+
+        /* Fiche du contact : feuille plein écran qui monte, comme sur iOS */
+        #infoPanel {
+            position: fixed;
+            inset: 0;
+            z-index: 10;
+            padding-top: max(14px, env(safe-area-inset-top));
+            padding-bottom: max(24px, env(safe-area-inset-bottom));
+            animation: sheet-up 0.28s ease-out;
+        }
+        #btnCloseInfo { top: max(12px, env(safe-area-inset-top)); left: 16px; }
+        @keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+        .msg { max-width: 75%; }
+        .composer { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+        .composer-field { min-height: 38px; }
+        #btnSend { width: 30px; height: 30px; }
     </style>
 </head>
 <body>
     <!-- 1. Connexion / création de compte (REST) -->
-    <section id="authView">
-        <h1>📱 Messagerie — Mobile</h1>
+    <section id="authView" class="auth">
+        <div class="app-icon" aria-hidden="true">
+            <svg viewBox="0 0 48 48"><path fill="#fff" d="M24 7C13.5 7 5 14.2 5 23.1c0 5 2.7 9.5 7 12.5-.3 2.6-1.6 4.9-3.4 6.5 3.7-.2 7-1.6 9.4-3.8 1.9.5 3.9.8 6 .8 10.5 0 19-7.2 19-16S34.5 7 24 7z"/></svg>
+        </div>
+        <h1>Messages</h1>
+        <p class="subtitle">Client mobile — connectez-vous ou créez un compte.</p>
         <form id="authForm">
-            <label>Serveur <input id="server" required inputmode="url"></label>
-            <label>Nom d'utilisateur <input id="username" required minlength="3" maxlength="50" autocomplete="username" autocapitalize="none"></label>
-            <label>Mot de passe <input id="password" type="password" required minlength="4" autocomplete="current-password"></label>
-            <div class="actions">
-                <button id="btnLogin" type="submit">Se connecter</button>
-                <button id="btnRegister" type="submit">Créer un compte</button>
+            <div class="form-group">
+                <div class="form-row">
+                    <label for="username">Utilisateur</label>
+                    <input id="username" required minlength="3" maxlength="50" autocomplete="username" autocapitalize="none" placeholder="bob">
+                </div>
+                <div class="form-row">
+                    <label for="password">Mot de passe</label>
+                    <input id="password" type="password" required minlength="4" autocomplete="current-password" placeholder="Requis">
+                </div>
+                <div class="form-row">
+                    <label for="server">Serveur</label>
+                    <input id="server" required inputmode="url" autocapitalize="none">
+                </div>
             </div>
+            <p class="form-footnote">Pas encore de compte ? Remplissez les champs puis « Créer un compte ».</p>
+            <button id="btnLogin" class="btn-primary" type="submit">Se connecter</button>
+            <button id="btnRegister" class="btn-plain" type="submit">Créer un compte</button>
             <p id="authMessage"></p>
         </form>
-        <p class="hint">Pas encore de compte ? Remplissez les champs puis « Créer un compte ».</p>
     </section>
 
     <!-- 2. Messagerie -->
     <section id="chatView" hidden>
-        <header>
-            <h1>📱 <span id="meLabel"></span></h1>
-            <span class="spacer"></span>
-            <button id="btnLogout">Déconnexion</button>
-            <span id="wsStatus"></span>
-        </header>
-
         <aside>
+            <div class="top-bar">
+                <button id="btnLogout" class="glass">Déconnexion</button>
+            </div>
+            <h1 class="large-title">Messages</h1>
+            <p class="me-line"><span id="meLabel"></span> · <span id="wsStatus" class="ws-status"></span></p>
             <ul id="userList"></ul>
-            <p class="hint">Touchez un contact pour ouvrir la conversation. Point vert = en ligne.</p>
-            <p class="hint">Statuts : ✓ envoyé · ✓✓ livré · <b>✓✓ lu</b></p>
+            <details class="journal">
+                <summary>Journal REST / WebSocket</summary>
+                <ol id="log" reversed></ol>
+            </details>
         </aside>
 
         <main>
             <p id="emptyState"></p>
             <div id="conversation" hidden>
-                <header>
-                    <button id="btnBack" aria-label="Retour aux contacts">←</button>
-                    <div><strong id="contactName"></strong><br><small id="contactPresence"></small></div>
+                <header class="conv-header conv-bar">
+                    <button id="btnBack" class="glass round" aria-label="Retour aux conversations">
+                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12.5 3.5L6 10l6.5 6.5"/></svg>
+                    </button>
+                    <button id="btnContactInfo" class="contact-header" aria-controls="infoPanel" aria-expanded="false" title="Informations sur le contact">
+                        <span id="contactAvatar" class="avatar"></span>
+                        <span class="glass"><span id="contactName"></span><span class="chev">›</span></span>
+                        <span id="contactPresence" class="presence"></span>
+                    </button>
                 </header>
-                <ul id="messages"></ul>
-                <p id="typing"></p>
-                <p id="composerError" class="error"></p>
-                <form id="sendForm">
-                    <input id="messageInput" placeholder="Message…" autocomplete="off" maxlength="5000">
-                    <button id="btnSend" type="submit">Envoyer</button>
+                <div id="thread">
+                    <ul id="messages"></ul>
+                    <div id="typing" class="typing" hidden><span></span><span></span><span></span></div>
+                </div>
+                <p id="composerError"></p>
+                <form id="sendForm" class="composer">
+                    <div class="composer-field">
+                        <input id="messageInput" placeholder="Message" autocomplete="off" maxlength="5000">
+                        <button id="btnSend" type="submit" aria-label="Envoyer">
+                            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 12V2M2.5 6.5L7 2l4.5 4.5"/></svg>
+                        </button>
+                    </div>
                 </form>
             </div>
         </main>
 
-        <details>
-            <summary>Journal REST / WebSocket</summary>
-            <ol id="log" reversed></ol>
-        </details>
+        <section id="infoPanel" aria-label="Informations sur le contact" hidden>
+            <button id="btnCloseInfo" class="glass round" aria-label="Fermer">
+                <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 2l10 10M12 2L2 12"/></svg>
+            </button>
+            <div class="info-head">
+                <span id="infoAvatar" class="avatar"></span>
+                <h2 id="infoName"></h2>
+                <span id="infoPresence" class="presence"></span>
+            </div>
+            <div id="infoBody"></div>
+        </section>
     </section>
 
     <script type="module">

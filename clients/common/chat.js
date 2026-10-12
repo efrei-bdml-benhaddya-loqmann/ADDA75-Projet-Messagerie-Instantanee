@@ -9,7 +9,11 @@
 
 import { ChatWebSocketClient, fetchMessageHistory, fetchUsers, login, register } from "./api.js";
 
-const STATUS_LABEL = { envoye: "✓ envoyé", livre: "✓✓ livré", lu: "✓✓ lu" };
+// Libellés d'iMessage, affichés sous le dernier message envoyé
+const STATUS_LABEL = { envoye: "Envoyé", livre: "Distribué", lu: "Lu" };
+const STATUS_RANK = { envoye: 0, livre: 1, lu: 2 };
+// Comme iMessage : un nouvel horodatage centré après une heure sans message
+const TIME_GAP_MS = 60 * 60 * 1000;
 const USERS_REFRESH_MS = 5000;
 const RECONNECT_DELAY_MS = 3000;
 
@@ -26,8 +30,11 @@ export function initChat({ onConversationOpened = () => {}, onConversationClosed
         me: null, // {id, username}
         users: [],
         contactId: null,
+        messages: [], // messages de la conversation ouverte, dans l'ordre chronologique
         unread: {}, // expediteurId -> nombre de messages non lus
         loggedOut: true,
+        wsConnected: false,
+        infoOpen: false, // panneau d'informations sur le contact
         usersTimer: null,
         typingTimer: null,
         lastTypingSent: 0,
@@ -77,7 +84,9 @@ export function initChat({ onConversationOpened = () => {}, onConversationClosed
         $("authView").hidden = true;
         $("chatView").hidden = false;
         await refreshUsers();
-        $("meLabel").textContent = `${state.me.username} (#${state.me.id})`;
+        $("meLabel").textContent = state.me.username;
+        $("meLabel").title = `Identifiant #${state.me.id}`;
+        $("meAvatar")?.replaceChildren(initials(state.me.username));
         connectWs();
         state.usersTimer = setInterval(refreshUsers, USERS_REFRESH_MS);
     }
@@ -86,8 +95,9 @@ export function initChat({ onConversationOpened = () => {}, onConversationClosed
         state.loggedOut = true;
         clearInterval(state.usersTimer);
         client.disconnect();
-        Object.assign(state, { token: null, me: null, users: [], contactId: null, unread: {} });
+        Object.assign(state, { token: null, me: null, users: [], contactId: null, messages: [], unread: {} });
         $("messages").replaceChildren();
+        setInfoOpen(false);
         $("chatView").hidden = true;
         $("authView").hidden = false;
         $("password").value = "";
@@ -111,29 +121,39 @@ export function initChat({ onConversationOpened = () => {}, onConversationClosed
         renderConversationHeader();
     }
 
+    function el(tag, className, text) {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined) node.textContent = text; // textContent : pas d'injection HTML possible
+        return node;
+    }
+
+    /** Initiales affichées dans l'avatar, comme un contact sans photo dans iMessage. */
+    function initials(username) {
+        const parts = username.split(/[\s._-]+/).filter(Boolean);
+        return parts.slice(0, 2).map((p) => p[0].toUpperCase()).join("");
+    }
+
+    function presenceText(user) {
+        return user.connecte ? "En ligne" : "Hors ligne";
+    }
+
     function renderUsers() {
         const others = state.users.filter((u) => u.id !== state.me.id);
         const items = others.map((u) => {
             const li = document.createElement("li");
-            const button = document.createElement("button");
-            button.className = u.id === state.contactId ? "contact active" : "contact";
+            const button = el("button", u.id === state.contactId ? "contact active" : "contact");
             button.onclick = () => openConversation(u.id);
 
-            const dot = document.createElement("span");
-            dot.className = u.connecte ? "dot online" : "dot";
-            const name = document.createElement("span");
-            name.className = "name";
-            name.textContent = u.username;
-            const presence = document.createElement("small");
-            presence.textContent = u.connecte ? "en ligne" : "hors ligne";
-            button.append(dot, name, presence);
-
-            if (state.unread[u.id]) {
-                const badge = document.createElement("span");
-                badge.className = "unread";
-                badge.textContent = state.unread[u.id];
-                button.append(badge);
-            }
+            // Point bleu d'iMessage pour une conversation non lue
+            const unread = el("span", state.unread[u.id] ? "unread-dot visible" : "unread-dot");
+            if (state.unread[u.id]) unread.title = `${state.unread[u.id]} message(s) non lu(s)`;
+            const text = el("span", "row-text");
+            text.append(
+                el("span", "name", u.username),
+                el("span", u.connecte ? "presence online" : "presence", presenceText(u)),
+            );
+            button.append(unread, el("span", "avatar", initials(u.username)), text, el("span", "chevron", "›"));
             li.append(button);
             return li;
         });
@@ -158,15 +178,85 @@ export function initChat({ onConversationOpened = () => {}, onConversationClosed
         $("conversation").hidden = !c;
         if (!c) return;
         $("contactName").textContent = c.username;
-        $("contactPresence").textContent = c.connecte ? "en ligne" : "hors ligne";
-        $("contactPresence").className = c.connecte ? "online" : "";
+        $("contactAvatar").textContent = initials(c.username);
+        $("contactPresence").textContent = presenceText(c);
+        $("contactPresence").className = c.connecte ? "presence online" : "presence";
+        renderInfo();
+    }
+
+    // ---------- Panneau d'informations sur le contact ----------
+
+    function setInfoOpen(open) {
+        state.infoOpen = open;
+        $("infoPanel").hidden = !open;
+        $("btnContactInfo").setAttribute("aria-expanded", String(open));
+        renderInfo();
+    }
+
+    function formatDate(date) {
+        return date.toLocaleString("fr-FR", {
+            weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+        });
+    }
+
+    /** Groupe de lignes « libellé — valeur », au style des listes groupées d'iOS. */
+    function infoGroup(title, rows, footnote) {
+        const section = el("section", "info-section");
+        if (title) section.append(el("h3", "info-title", title));
+        const group = el("div", "form-group");
+        for (const [label, value, className] of rows) {
+            const row = el("div", "form-row");
+            row.append(el("span", "info-label", label), el("span", `info-value ${className ?? ""}`, value));
+            group.append(row);
+        }
+        section.append(group);
+        if (footnote) section.append(el("p", "form-footnote", footnote));
+        return section;
+    }
+
+    /**
+     * Uniquement des données réelles : le contact (GET /api/utilisateurs), l'historique chargé
+     * (GET /api/messages/{id}, puis complété en direct par le WebSocket) et l'état du canal.
+     */
+    function renderInfo() {
+        const c = contact();
+        if (!state.infoOpen || !c) return;
+        $("infoAvatar").textContent = initials(c.username);
+        $("infoName").textContent = c.username;
+        $("infoPresence").textContent = presenceText(c);
+        $("infoPresence").className = c.connecte ? "presence online" : "presence";
+
+        const msgs = state.messages;
+        const mine = msgs.filter((m) => m.expediteurId === state.me.id);
+        const count = (statut) => String(mine.filter((m) => m.statut === statut).length);
+        const sections = [
+            infoGroup("Conversation", msgs.length === 0 ? [["Messages", "Aucun message"]] : [
+                ["Messages échangés", String(msgs.length)],
+                ["Envoyés", String(mine.length)],
+                ["Reçus", String(msgs.length - mine.length)],
+                ["Premier message", formatDate(new Date(msgs[0].dateEnvoi))],
+                ["Dernier message", formatDate(new Date(msgs.at(-1).dateEnvoi))],
+            ]),
+            infoGroup("Vos messages", [
+                ["Lus", count("lu")],
+                ["Distribués, non lus", count("livre")],
+                ["En attente de distribution", count("envoye")],
+            ], "« Distribué » : remis à l'appareil du contact. « En attente » : stocké sur le serveur jusqu'à sa reconnexion."),
+            infoGroup("Détails techniques", [
+                ["Identifiant", `#${c.id}`],
+                ["Historique (REST)", `GET /api/messages/${c.id}`, "mono"],
+                ["Temps réel", state.wsConnected ? "WebSocket connecté" : "WebSocket déconnecté", state.wsConnected ? "online-text" : ""],
+            ], "Les messages transitent par le serveur : ils sont enregistrés en base de données puis retransmis en temps réel par WebSocket. Ils ne sont pas chiffrés de bout en bout."),
+        ];
+        $("infoBody").replaceChildren(...sections);
     }
 
     async function openConversation(userId) {
         state.contactId = userId;
         state.unread[userId] = 0;
-        $("messages").replaceChildren();
-        $("typing").textContent = "";
+        state.messages = [];
+        renderThread();
+        $("typing").hidden = true;
         $("composerError").textContent = "";
         renderUsers();
         renderConversationHeader();
@@ -176,6 +266,7 @@ export function initChat({ onConversationOpened = () => {}, onConversationClosed
     }
 
     function closeConversation() {
+        setInfoOpen(false);
         state.contactId = null;
         renderUsers();
         renderConversationHeader();
@@ -187,8 +278,8 @@ export function initChat({ onConversationOpened = () => {}, onConversationClosed
         try {
             const history = await fetchMessageHistory(state.apiBase, state.token, contactId);
             if (contactId !== state.contactId) return; // l'utilisateur a changé de contact
-            $("messages").replaceChildren();
-            history.forEach(appendMessage);
+            state.messages = history;
+            renderThread();
             log(`Historique chargé (GET /api/messages/${contactId}) : ${history.length} message(s)`);
             client.sendRead(contactId);
         } catch (err) {
@@ -196,41 +287,65 @@ export function initChat({ onConversationOpened = () => {}, onConversationClosed
         }
     }
 
-    function appendMessage(m) {
-        const mine = m.expediteurId === state.me.id;
-        const li = document.createElement("li");
-        li.className = mine ? "msg mine" : "msg theirs";
-        li.dataset.id = m.id;
-
-        const text = document.createElement("div");
-        text.textContent = m.contenu; // textContent : pas d'injection HTML possible
-        const meta = document.createElement("div");
-        meta.className = "meta";
-        meta.textContent = new Date(m.dateEnvoi).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        if (mine) {
-            const status = document.createElement("span");
-            status.className = "status";
-            meta.append(" · ", status);
-        }
-        li.append(text, meta);
-        if (mine) setStatus(li, m.statut);
-
-        $("messages").append(li);
-        li.scrollIntoView({ block: "end" });
+    function addMessage(m) {
+        state.messages.push(m);
+        renderThread();
     }
 
-    function setStatus(li, statut) {
-        const status = li.querySelector(".status");
-        if (!status || status.dataset.statut === "lu") return; // « lu » est l'état final
-        status.textContent = STATUS_LABEL[statut] ?? statut;
-        status.dataset.statut = statut;
+    /** Horodatage centré façon iMessage : « Aujourd'hui 14:21 », « Hier 09:05 », « lun. 7 sept. 12:08 ». */
+    function timestampRow(date) {
+        const now = new Date();
+        const yesterday = new Date(now);
+        yesterday.setDate(now.getDate() - 1);
+        const day = date.toDateString() === now.toDateString() ? "Aujourd'hui"
+            : date.toDateString() === yesterday.toDateString() ? "Hier"
+            : date.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
+        const li = el("li", "timestamp");
+        li.append(el("strong", "", day), ` ${date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`);
+        return li;
+    }
+
+    /**
+     * Redessine la conversation : bulles regroupées par expéditeur (la « queue » n'est que sur
+     * la dernière bulle d'un groupe), horodatages après une heure de silence, et statut sous le
+     * dernier message envoyé uniquement, comme dans iMessage.
+     */
+    function renderThread() {
+        const msgs = state.messages;
+        const lastMine = msgs.findLastIndex((m) => m.expediteurId === state.me?.id);
+        const items = [];
+        msgs.forEach((m, i) => {
+            const date = new Date(m.dateEnvoi);
+            const prev = msgs[i - 1];
+            const next = msgs[i + 1];
+            const breakBefore = !prev || date - new Date(prev.dateEnvoi) > TIME_GAP_MS;
+            const breakAfter = !next || new Date(next.dateEnvoi) - date > TIME_GAP_MS;
+            if (breakBefore) items.push(timestampRow(date));
+
+            const mine = m.expediteurId === state.me.id;
+            const first = breakBefore || prev.expediteurId !== m.expediteurId;
+            const last = breakAfter || next.expediteurId !== m.expediteurId;
+            const bubble = el("li", `msg ${mine ? "mine" : "theirs"}${first ? " first" : ""}${last ? " tail" : ""}`, m.contenu);
+            bubble.title = date.toLocaleString("fr-FR");
+            items.push(bubble);
+
+            if (i === lastMine) items.push(el("li", "receipt", STATUS_LABEL[m.statut] ?? m.statut));
+        });
+        $("messages").replaceChildren(...items);
+        scrollToBottom();
+        renderInfo();
+    }
+
+    function scrollToBottom() {
+        $("thread").scrollTop = $("thread").scrollHeight;
     }
 
     function updateStatuses(messageIds, statut) {
-        for (const id of messageIds) {
-            const li = $("messages").querySelector(`[data-id="${id}"]`);
-            if (li) setStatus(li, statut);
+        for (const m of state.messages) {
+            // Un statut ne recule jamais (« lu » est l'état final)
+            if (messageIds.includes(m.id) && STATUS_RANK[statut] > STATUS_RANK[m.statut]) m.statut = statut;
         }
+        renderThread();
     }
 
     function setComposerEnabled(enabled) {
@@ -245,6 +360,7 @@ export function initChat({ onConversationOpened = () => {}, onConversationClosed
         const wsBase = state.apiBase.replace(/^http/, "ws"); // http → ws, https → wss
         client.connect(wsBase, state.token, {
             onOpen: () => {
+                state.wsConnected = true;
                 setWsStatus("connecté", "online");
                 setComposerEnabled(true);
                 log("WebSocket ouvert (/ws/messages)");
@@ -252,6 +368,7 @@ export function initChat({ onConversationOpened = () => {}, onConversationClosed
                 if (state.contactId) loadHistory(); // rattrape ce qui a été reçu pendant la coupure
             },
             onClose: (event) => {
+                state.wsConnected = false;
                 setWsStatus("déconnecté", "");
                 setComposerEnabled(false);
                 if (state.loggedOut) return;
@@ -266,8 +383,8 @@ export function initChat({ onConversationOpened = () => {}, onConversationClosed
             onMessage: (m) => {
                 log(`Message #${m.id} reçu en direct de #${m.expediteurId} (WebSocket)`);
                 if (m.expediteurId === state.contactId) {
-                    $("typing").textContent = "";
-                    appendMessage(m);
+                    $("typing").hidden = true;
+                    addMessage(m);
                     client.sendRead(m.expediteurId);
                 } else {
                     state.unread[m.expediteurId] = (state.unread[m.expediteurId] ?? 0) + 1;
@@ -276,7 +393,7 @@ export function initChat({ onConversationOpened = () => {}, onConversationClosed
             },
             onAck: (m) => {
                 log(`Accusé serveur : message #${m.id} enregistré, statut « ${m.statut} »`);
-                if (m.destinataireId === state.contactId) appendMessage(m);
+                if (m.destinataireId === state.contactId) addMessage(m);
             },
             onDeliveredAck: (d) => {
                 log(`Message(s) ${d.messageIds.join(", ")} livré(s) à #${d.destinataireId}`);
@@ -288,9 +405,14 @@ export function initChat({ onConversationOpened = () => {}, onConversationClosed
             },
             onTyping: (t) => {
                 if (t.expediteurId !== state.contactId) return;
+                // Bulle « … » animée d'iMessage
                 clearTimeout(state.typingTimer);
-                $("typing").textContent = t.isTyping ? `${contact()?.username} est en train d'écrire…` : "";
-                if (t.isTyping) state.typingTimer = setTimeout(() => ($("typing").textContent = ""), 3000);
+                $("typing").hidden = !t.isTyping;
+                $("typing").title = `${contact()?.username} est en train d'écrire…`;
+                if (t.isTyping) {
+                    scrollToBottom();
+                    state.typingTimer = setTimeout(() => ($("typing").hidden = true), 3000);
+                }
             },
             onServerError: (e) => {
                 const text = e.code === "RATE_LIMITED"
@@ -304,7 +426,8 @@ export function initChat({ onConversationOpened = () => {}, onConversationClosed
 
     function setWsStatus(text, className) {
         $("wsStatus").textContent = `Temps réel : ${text}`;
-        $("wsStatus").className = className;
+        $("wsStatus").className = `ws-status ${className}`;
+        renderInfo();
     }
 
     function sendMessage(event) {
@@ -335,6 +458,8 @@ export function initChat({ onConversationOpened = () => {}, onConversationClosed
     });
     $("btnLogout").addEventListener("click", () => logout());
     $("btnBack")?.addEventListener("click", closeConversation);
+    $("btnContactInfo").addEventListener("click", () => setInfoOpen(!state.infoOpen));
+    $("btnCloseInfo").addEventListener("click", () => setInfoOpen(false));
     $("sendForm").addEventListener("submit", sendMessage);
     $("messageInput").addEventListener("input", notifyTyping);
 }

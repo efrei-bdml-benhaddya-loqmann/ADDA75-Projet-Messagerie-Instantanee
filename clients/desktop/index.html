@@ -3,116 +3,154 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Messagerie — Client Bureau</title>
+    <title>Messages — Client Bureau</title>
+    <link rel="stylesheet" href="../common/imessage.css">
     <style>
-        * { box-sizing: border-box; }
-        [hidden] { display: none !important; }
-        body { margin: 0; font-family: system-ui, sans-serif; background: #f4f4f4; color: #222; }
-        h1 { font-size: 18px; margin: 0; }
-        h2 { font-size: 15px; margin: 0 0 8px; }
-        input, button { font: inherit; padding: 6px 10px; }
-        button { cursor: pointer; }
-        .error { color: #c62828; }
-        .online { color: #2e7d32; }
-        .hint { color: #777; font-size: 13px; }
+        /* Mise en page de Messages sur macOS : barre latérale à gauche, conversation à droite */
+        body { font-size: 14px; overflow: hidden; }
 
-        /* Connexion */
-        #authView { max-width: 420px; margin: 60px auto; background: #fff; padding: 24px; border: 1px solid #ddd; }
-        #authForm label { display: block; margin-top: 10px; font-size: 13px; }
-        #authForm input { width: 100%; }
-        .actions { display: flex; gap: 8px; margin-top: 16px; }
+        #chatView { display: grid; grid-template-columns: 320px 1fr auto; height: 100vh; }
 
-        /* Messagerie : contacts à gauche, conversation à droite */
-        #chatView { height: 100vh; display: grid; grid-template-rows: auto 1fr auto; }
-        #chatView > header { display: flex; align-items: center; gap: 16px; padding: 10px 16px; background: #fff; border-bottom: 1px solid #ddd; }
-        #chatView > header .spacer { flex: 1; }
-        .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 0; }
-        aside { background: #fff; border-right: 1px solid #ddd; padding: 12px; overflow-y: auto; }
-        #userList { list-style: none; margin: 0; padding: 0; }
-        .contact { width: 100%; display: flex; align-items: center; gap: 8px; border: 1px solid transparent; background: none; text-align: left; }
-        .contact:hover { background: #f0f0f0; }
-        .contact.active { border-color: #1976d2; background: #e3f2fd; }
-        .contact .name { flex: 1; }
-        .dot { width: 10px; height: 10px; border-radius: 50%; background: #bbb; }
-        .dot.online { background: #2e7d32; }
-        .unread { background: #c62828; color: #fff; border-radius: 10px; padding: 0 7px; font-size: 12px; }
+        aside {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            padding: 12px 10px 8px;
+            background: var(--sidebar-bg);
+            border-right: 0.5px solid var(--separator);
+        }
+        .sidebar-header { display: flex; align-items: center; gap: 10px; padding: 2px 4px 14px; }
+        .sidebar-header .avatar { width: 32px; height: 32px; font-size: 13px; }
+        .sidebar-header .me { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        #meLabel { font-weight: 600; font-size: 13px; }
 
-        main { display: flex; flex-direction: column; min-height: 0; }
-        #emptyState { margin: auto; color: #777; }
-        #conversation { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-        #conversation > header { padding: 10px 16px; background: #fff; border-bottom: 1px solid #ddd; }
-        #messages { list-style: none; margin: 0; padding: 16px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
-        .msg { max-width: 60%; padding: 6px 10px; border-radius: 8px; white-space: pre-wrap; word-wrap: break-word; }
-        .msg.mine { align-self: flex-end; background: #1976d2; color: #fff; }
-        .msg.theirs { align-self: flex-start; background: #fff; border: 1px solid #ddd; }
-        .meta { font-size: 11px; opacity: .8; margin-top: 2px; text-align: right; }
-        .status[data-statut="lu"] { font-weight: bold; }
-        #typing, #composerError { margin: 0 16px; min-height: 18px; font-size: 13px; }
-        #typing { color: #777; font-style: italic; }
-        #sendForm { display: flex; gap: 8px; padding: 10px 16px; background: #fff; border-top: 1px solid #ddd; }
-        #messageInput { flex: 1; }
+        #userList { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+        .contact {
+            display: grid;
+            grid-template-columns: 10px 40px 1fr;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            padding: 10px 10px 10px 4px;
+            border: 0;
+            border-radius: 10px;
+            background: none;
+            text-align: left;
+        }
+        .contact:not(.active):hover { background: rgba(0, 0, 0, 0.04); }
+        .contact.active { background: var(--selection); color: #fff; }
+        .contact.active .presence { color: rgba(255, 255, 255, 0.85); }
+        .contact .chevron { display: none; }
+        .row-text { display: flex; flex-direction: column; min-width: 0; }
+        .row-text .name { font-weight: 600; font-size: 14px; }
+        .row-text .presence { font-size: 13px; }
+        .unread-dot { width: 10px; height: 10px; border-radius: 50%; }
+        .unread-dot.visible { background: var(--blue); }
 
-        details { background: #fff; border-top: 1px solid #ddd; padding: 6px 16px; font-size: 12px; }
-        #log { max-height: 120px; overflow-y: auto; margin: 6px 0 0; padding-left: 18px; }
+        .journal { padding: 6px 4px 0; border-top: 0.5px solid var(--separator); }
+
+        main { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+        #emptyState { margin: auto; color: var(--secondary); font-size: 15px; }
+        #conversation { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+        /* En-tête centré (avatar puis nom dans une capsule), flottant au-dessus du fil */
+        .conv-bar { display: flex; justify-content: center; padding: 4px 0 2px; }
+        .contact-header .avatar { width: 44px; height: 44px; font-size: 17px; }
+        #thread { padding-top: 100px; }
+
+        /* Panneau d'informations à droite, comme dans Messages sur macOS */
+        #infoPanel { width: 340px; border-left: 0.5px solid var(--separator); }
+
+        .msg { font-size: 14px; max-width: 60%; }
     </style>
 </head>
 <body>
     <!-- 1. Connexion / création de compte (REST) -->
-    <section id="authView">
-        <h1>💻 Messagerie — Bureau</h1>
+    <section id="authView" class="auth">
+        <div class="app-icon" aria-hidden="true">
+            <svg viewBox="0 0 48 48"><path fill="#fff" d="M24 7C13.5 7 5 14.2 5 23.1c0 5 2.7 9.5 7 12.5-.3 2.6-1.6 4.9-3.4 6.5 3.7-.2 7-1.6 9.4-3.8 1.9.5 3.9.8 6 .8 10.5 0 19-7.2 19-16S34.5 7 24 7z"/></svg>
+        </div>
+        <h1>Messages</h1>
+        <p class="subtitle">Client bureau — connectez-vous ou créez un compte.</p>
         <form id="authForm">
-            <label>Serveur <input id="server" required></label>
-            <label>Nom d'utilisateur <input id="username" required minlength="3" maxlength="50" autocomplete="username"></label>
-            <label>Mot de passe <input id="password" type="password" required minlength="4" autocomplete="current-password"></label>
-            <div class="actions">
-                <button id="btnLogin" type="submit">Se connecter</button>
-                <button id="btnRegister" type="submit">Créer un compte</button>
+            <div class="form-group">
+                <div class="form-row">
+                    <label for="username">Utilisateur</label>
+                    <input id="username" required minlength="3" maxlength="50" autocomplete="username" placeholder="alice">
+                </div>
+                <div class="form-row">
+                    <label for="password">Mot de passe</label>
+                    <input id="password" type="password" required minlength="4" autocomplete="current-password" placeholder="4 caractères minimum">
+                </div>
+                <div class="form-row">
+                    <label for="server">Serveur</label>
+                    <input id="server" required>
+                </div>
             </div>
+            <p class="form-footnote">Sur l'autre appareil, ouvrez <code>/clients/mobile/</code> avec un second compte.</p>
+            <button id="btnLogin" class="btn-primary" type="submit">Se connecter</button>
+            <button id="btnRegister" class="btn-plain" type="submit">Créer un compte</button>
             <p id="authMessage"></p>
         </form>
-        <p class="hint">
-            Démo : connectez-vous ici avec l'utilisateur 1, et sur le téléphone
-            (<code>/clients/mobile/</code>) avec l'utilisateur 2, puis choisissez le contact.
-        </p>
     </section>
 
     <!-- 2. Messagerie -->
     <section id="chatView" hidden>
-        <header>
-            <h1>💻 Messagerie</h1>
-            <span>Connecté en tant que <strong id="meLabel"></strong></span>
-            <span id="wsStatus"></span>
-            <span class="spacer"></span>
-            <button id="btnLogout">Se déconnecter</button>
-        </header>
-
-        <div class="layout">
-            <aside>
-                <h2>Contacts</h2>
-                <ul id="userList"></ul>
-                <p class="hint">Présence rafraîchie toutes les 5 s (GET /api/utilisateurs).</p>
-                <p class="hint">Statuts : ✓ envoyé (stocké sur le serveur) · ✓✓ livré · <b>✓✓ lu</b></p>
-            </aside>
-
-            <main>
-                <p id="emptyState">← Choisissez un contact pour afficher la conversation.</p>
-                <div id="conversation" hidden>
-                    <header><strong id="contactName"></strong> — <span id="contactPresence"></span></header>
-                    <ul id="messages"></ul>
-                    <p id="typing"></p>
-                    <p id="composerError" class="error"></p>
-                    <form id="sendForm">
-                        <input id="messageInput" placeholder="Écrire un message…" autocomplete="off" maxlength="5000">
-                        <button id="btnSend" type="submit">Envoyer</button>
-                    </form>
+        <aside>
+            <div class="sidebar-header">
+                <span id="meAvatar" class="avatar"></span>
+                <div class="me">
+                    <span id="meLabel"></span>
+                    <span id="wsStatus" class="ws-status"></span>
                 </div>
-            </main>
-        </div>
+                <button id="btnLogout" class="glass round" title="Se déconnecter" aria-label="Se déconnecter">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="M9 16l-4-4 4-4"/><path d="M5 12h10"/></svg>
+                </button>
+            </div>
+            <ul id="userList"></ul>
+            <details class="journal">
+                <summary>Journal REST / WebSocket</summary>
+                <ol id="log" reversed></ol>
+            </details>
+        </aside>
 
-        <details>
-            <summary>Journal des échanges (REST / WebSocket)</summary>
-            <ol id="log" reversed></ol>
-        </details>
+        <main>
+            <p id="emptyState">Sélectionnez une conversation</p>
+            <div id="conversation" hidden>
+                <header class="conv-bar">
+                    <button id="btnContactInfo" class="contact-header" aria-controls="infoPanel" aria-expanded="false" title="Informations sur le contact">
+                        <span id="contactAvatar" class="avatar"></span>
+                        <span class="glass"><span id="contactName"></span><span class="chev">›</span></span>
+                        <span id="contactPresence" class="presence"></span>
+                    </button>
+                </header>
+                <div id="thread">
+                    <ul id="messages"></ul>
+                    <div id="typing" class="typing" hidden><span></span><span></span><span></span></div>
+                </div>
+                <p id="composerError"></p>
+                <form id="sendForm" class="composer">
+                    <div class="composer-field">
+                        <input id="messageInput" placeholder="Message" autocomplete="off" maxlength="5000">
+                        <button id="btnSend" type="submit" aria-label="Envoyer">
+                            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 12V2M2.5 6.5L7 2l4.5 4.5"/></svg>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </main>
+
+        <section id="infoPanel" aria-label="Informations sur le contact" hidden>
+            <button id="btnCloseInfo" class="glass round" aria-label="Fermer">
+                <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 2l10 10M12 2L2 12"/></svg>
+            </button>
+            <div class="info-head">
+                <span id="infoAvatar" class="avatar"></span>
+                <h2 id="infoName"></h2>
+                <span id="infoPresence" class="presence"></span>
+            </div>
+            <div id="infoBody"></div>
+        </section>
     </section>
 
     <script type="module">

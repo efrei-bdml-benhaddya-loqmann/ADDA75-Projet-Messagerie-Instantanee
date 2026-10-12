@@ -203,7 +203,7 @@ livrer ensuite » :
 
 1. **Persistance systématique.** Le message est enregistré en base avant toute tentative de
    livraison, avec le statut `envoye`. L'expéditeur reçoit un `ack` avec ce statut : son client
-   affiche « ✓ envoyé », ce qui signifie « stocké sur le serveur, pas encore remis ».
+   affiche « Envoyé » sous la bulle, ce qui signifie « stocké sur le serveur, pas encore remis ».
 2. **Notification hors ligne (bonus).** Le serveur déclenche un webhook vers un service tiers de
    notifications, ici simulé par un log : `Webhook simulé : notification envoyée à l'utilisateur 2
    (nouveau message 3 de l'utilisateur 1)`. C'est le modèle du TP4 (webhook.site) : le serveur
@@ -211,10 +211,10 @@ livrer ensuite » :
    enverrait une notification push au téléphone.
 3. **Livraison à la reconnexion.** Quand B ouvre sa connexion WebSocket, le serveur passe ses
    messages en attente à `livre` et envoie à chaque expéditeur connecté un
-   `{"type": "delivered_ack", "messageIds": [...]}` : la coche « ✓ » devient « ✓✓ livré » chez A.
+   `{"type": "delivered_ack", "messageIds": [...]}` : le statut devient « Distribué » chez A.
 4. **Rattrapage par l'historique.** Le client de B recharge la conversation en REST
    (`GET /api/messages/1`) ; il obtient tous les messages, y compris ceux envoyés en son absence,
-   dans l'ordre chronologique. Dès qu'il les affiche, il envoie `read` et A voit « ✓✓ lu ».
+   dans l'ordre chronologique. Dès qu'il les affiche, il envoie `read` et A voit « Lu ».
 
 ### 4.2. Parallèle avec Apache Kafka (Chapitre 6)
 
@@ -250,7 +250,7 @@ réception explicite du client destinataire avant de passer à `livre`.
 | Base de données | **SQLite fichier** | Équivalent Python de H2 accepté par l'énoncé. Un *fichier* et non une base en mémoire, pour que l'historique survive à un redémarrage du serveur. |
 | Format | JSON en **camelCase** côté API, snake_case côté Python | L'énoncé impose `expediteurId`, `dateEnvoi`, `motDePasse` : `alias_generator=to_camel` dans les schémas Pydantic. |
 | Dates | UTC, ISO 8601, générées par le serveur | Les horloges des appareils ne sont pas fiables ; un `TypeDecorator` réattache le fuseau UTC que SQLite perd. |
-| Clients | HTML + JavaScript sans framework | Le front n'est pas évalué sur le design. `common/api.js` (appels REST et WebSocket) et `common/chat.js` (logique d'interface) sont partagés ; `desktop/` (contacts et conversation côte à côte) et `mobile/` (un écran à la fois, boutons larges) n'ont en propre que leur mise en page. |
+| Clients | HTML + JavaScript sans framework | Le front n'est pas évalué sur le design. `common/api.js` (appels REST et WebSocket) et `common/chat.js` (logique d'interface) sont partagés ; `desktop/` (contacts et conversation côte à côte) et `mobile/` (un écran à la fois, boutons larges) n'ont en propre que leur mise en page. L'interface reprend les codes visuels de Messages (iMessage) sur macOS et iOS, définis une fois dans `common/imessage.css` (couleurs système, mode sombre, bulles groupées), sans fonctionnalité factice. |
 | Tests | pytest + `TestClient` (REST et WebSocket), collection Bruno | Automatiser ce que nous aurions testé à la main ; Bruno reprend l'outil des TP1 et TP2. |
 
 ### 5.1. Réutilisation des notions des TP
@@ -341,10 +341,10 @@ client mobile depuis son navigateur à l'adresse IP du premier.
 
 | Étape | Résultat observé |
 | :--- | :--- |
-| 1–2. Connexion de A (bureau) puis de B (mobile) | Chacun voit l'autre « en ligne » (point vert) |
-| 3. A envoie un message | Il apparaît instantanément sur B ; « ✓✓ livré », puis « ✓✓ lu » quand B ouvre la conversation |
+| 1–2. Connexion de A (bureau) puis de B (mobile) | Chacun voit l'autre « En ligne » (point vert) |
+| 3. A envoie un message | Il apparaît instantanément sur B ; « Distribué », puis « Lu » quand B ouvre la conversation |
 | 4. B répond | Il apparaît instantanément sur A |
-| 5. A se déconnecte et se reconnecte | B le voit « hors ligne » ; un message de B affiche « ✓ envoyé » et le webhook est loggé ; à la reconnexion, l'historique complet (3 messages) est rechargé et le message passe à « ✓✓ lu » |
+| 5. A se déconnecte et se reconnecte | B le voit « hors ligne » ; un message de B affiche « Envoyé » et le webhook est loggé ; à la reconnexion, l'historique complet (3 messages) est rechargé et le message passe à « Lu » |
 
 ### 7.3. Capture de la démonstration
 

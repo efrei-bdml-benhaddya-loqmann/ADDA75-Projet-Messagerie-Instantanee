@@ -47,21 +47,24 @@ Les clients sont servis par le même serveur :
 
 1. **Appareil A** (ordinateur) : ouvrir le client bureau, saisir un nom et un mot de passe, « Créer un compte ».
 2. **Appareil B** (téléphone) : ouvrir le client mobile, créer un second compte.
-   Chaque client voit l'autre dans sa liste de contacts avec un **point vert** (en ligne).
+   Chaque client voit l'autre dans sa liste de conversations, avec « En ligne » et un **point vert**.
 3. Sur A, cliquer sur le contact et envoyer un message : il apparaît **immédiatement** sur B
-   (badge de non-lus dans la liste, ou directement dans la conversation ouverte).
+   (point bleu « non lu » dans la liste, ou directement dans la conversation ouverte).
 4. Répondre depuis B : le message apparaît immédiatement sur A.
 5. Sur A, « Se déconnecter », puis se reconnecter : en rouvrant le contact, **tout l'historique**
    est rechargé depuis le serveur (`GET /api/messages/{id}`).
 
 À observer en plus :
-- les statuts sous ses propres messages : `✓ envoyé` (stocké sur le serveur, destinataire hors ligne),
-  `✓✓ livré`, **`✓✓ lu`** ;
-- « … est en train d'écrire » pendant la saisie ;
+- le statut sous son dernier message envoyé, comme dans iMessage : « Envoyé » (stocké sur le
+  serveur, destinataire hors ligne), « Distribué », « Lu » ;
+- la bulle « … » animée pendant que l'autre écrit ;
 - un message envoyé à un destinataire hors ligne affiche dans la console du serveur
-  `Webhook simulé : notification envoyée à l'utilisateur …`, puis passe à « livré » à sa reconnexion ;
+  `Webhook simulé : notification envoyée à l'utilisateur …`, puis passe à « Distribué » à sa reconnexion ;
 - au-delà de 10 messages en 10 secondes, le client affiche le message anti-spam ;
-- le panneau « Journal » en bas de chaque client liste chaque échange REST et WebSocket.
+- le panneau repliable « Journal REST / WebSocket » (en bas de la barre latérale ou de la liste)
+  détaille chaque échange.
+
+L'interface reprend celle de Messages (iMessage) sur macOS et iOS, y compris le mode sombre.
 
 ## API
 
