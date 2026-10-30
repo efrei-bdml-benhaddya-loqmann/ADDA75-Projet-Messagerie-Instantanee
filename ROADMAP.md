@@ -99,9 +99,7 @@ class ConnectionManager:
 
 Répartition validée le 2026-09-23.
 
-> **État au 2026-10-12** — [x] = mergé sur `main`. Les éléments marqués « ✅ fait sur
-> `fix/validation-projet` » sont terminés et testés sur cette branche, mais pas encore relus ni
-> mergés : la case sera cochée après la relecture de la PR.
+> **État au 2026-10-30** — [x] = mergé sur `main`. Seule la relecture croisée du rapport reste ouverte.
 
 Principe : **chacun possède un domaine backend complet** (modèle → service → route → tests), et **chacun relit toutes les PR de l'autre**. En soutenance, les deux doivent pouvoir expliquer tout le projet.
 
@@ -113,12 +111,12 @@ Barème : API REST (3) + JWT (3) + une partie de l'architecture (4) et du bonus 
 - [x] `POST /api/auth/login` : vérification, génération du JWT, `401` si échec
 - [x] `security.py` + `get_current_user` (401 garanti)
 - [x] `GET /api/utilisateurs` avec `connecte` via `ConnectionManager.is_online`
-- [ ] Format d'erreur JSON homogène (`core/errors.py`) — base sur `main`, 404/422 harmonisés — ✅ fait sur `fix/validation-projet` (PR à relire)
+- [x] Format d'erreur JSON homogène (`core/errors.py`) — base sur `main`, 404/422 harmonisés
 - [x] Tests pytest : comptes, login, 401 sans token / token expiré / token falsifié
-- [ ] Bonus **rate limiting** : module `core/rate_limit.py` (fenêtre glissante par utilisateur) utilisé par B dans le handler WS + sur `/api/auth/login` (anti brute-force) — ✅ fait sur `fix/validation-projet` (PR à relire)
-- [ ] Bonus **Swagger** soigné : bouton « Authorize » JWT, exemples, descriptions — ✅ fait sur `fix/validation-projet` (PR à relire)
-- [ ] Client **desktop** + partie REST de `common/api.js` (inscription, login, liste utilisateurs, historique) — ✅ fait sur `fix/validation-projet` (PR à relire)
-- [ ] Rapport : schéma d'architecture, **question REST vs WebSocket pour l'historique**, choix sécurité — ✅ fait sur `fix/validation-projet` (PR à relire)
+- [x] Bonus **rate limiting** : module `core/rate_limit.py` (fenêtre glissante par utilisateur) utilisé par B dans le handler WS + sur `/api/auth/login` (anti brute-force)
+- [x] Bonus **Swagger** soigné : bouton « Authorize » JWT, exemples, descriptions
+- [x] Client **desktop** + partie REST de `common/api.js` (inscription, login, liste utilisateurs, historique)
+- [x] Rapport : schéma d'architecture, **question REST vs WebSocket pour l'historique**, choix sécurité
 
 ### 👤 Loqmann (B) — Messages & temps réel
 Barème : WebSocket (5) + persistance (2) + une partie de l'architecture (4) et du bonus (2).
@@ -135,16 +133,16 @@ Barème : WebSocket (5) + persistance (2) + une partie de l'architecture (4) et 
 - [x] Tests pytest : WS refusé sans token, message A → B reçu, message persisté
 - [x] Bonus **accusé de réception** (`envoye` / `livre` / `lu`)
 - [x] Client **mobile** + partie WebSocket de `common/api.js` (connexion, envoi, réception)
-- [ ] Correctifs de validation : reconnexion rapide (`disconnect`), destinataire inconnu, trame non JSON, code 1008 reçu par le navigateur, `delivered_ack` à la reconnexion — ✅ fait sur `fix/validation-projet` (PR à relire)
-- [ ] Bonus **notification hors ligne** (webhook simulé dans les logs, `realtime/notifications.py`) — ✅ fait sur `fix/validation-projet` (PR à relire)
+- [x] Correctifs de validation : reconnexion rapide (`disconnect`), destinataire inconnu, trame non JSON, code 1008 reçu par le navigateur, `delivered_ack` à la reconnexion
+- [x] Bonus **notification hors ligne** (webhook simulé dans les logs, `realtime/notifications.py`)
 - [x] Rapport : **question destinataire hors ligne (lien avec Kafka)**, difficultés du temps réel
 
 ### 👥 Ensemble
-- [ ] Étape 0 : valider ce document, écrire les contrats (section 2) en stubs
-- [ ] Collection commune : Bruno (`docs/bruno/`, 11 requêtes testées) + export Postman ; WebSocket documenté dans le README — ✅ fait sur `fix/validation-projet` (PR à relire)
-- [ ] Test réel : 2 machines sur le même réseau (`uvicorn --host 0.0.0.0`, CORS configuré) — ✅ validé le 2026-10-12 sur deux PC distincts sur le même Wi-Fi (PR à relire)
-- [ ] README (installation `uv sync`, lancement backend, ouverture des clients) — ✅ fait sur `fix/validation-projet` (PR à relire)
-- [ ] Répétition du scénario de démo §2.1 + captures d'écran pour le rapport — scénario répété le 2026-10-12 ; capture à ajouter dans `docs/rapport/captures/demo.png`
+- [x] Étape 0 : valider ce document, écrire les contrats (section 2) en stubs
+- [x] Collection commune : Bruno (`docs/bruno/`, 11 requêtes testées) + export Postman ; WebSocket documenté dans le README
+- [x] Test réel : 2 machines sur le même réseau (`uvicorn --host 0.0.0.0`, CORS configuré) — ✅ validé le 2026-10-12 sur deux PC distincts sur le même Wi-Fi
+- [x] README (installation `uv sync`, lancement backend, ouverture des clients)
+- [x] Répétition du scénario de démo §2.1 + captures d'écran pour le rapport — scénario répété le 2026-10-12 ; capture dans `docs/rapport/captures/00_demo.png`
 - [ ] Relecture croisée du rapport
 
 ## 4. Ordre des étapes (suit le §7 de l'énoncé)

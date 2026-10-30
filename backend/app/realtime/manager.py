@@ -1,8 +1,7 @@
 """Registre des connexions WebSocket actives, source de vérité pour la présence.
 
-Contrat partagé défini dans ROADMAP.md (§2) :
-`is_online` est aussi utilisé par le domaine users dans
-`GET /api/utilisateurs` pour renseigner le champ `connecte`.
+Contrat défini dans ROADMAP.md (§2) : `is_online` sert aussi à `GET /api/utilisateurs`,
+qui en tire le champ `connecte`.
 """
 
 from typing import Any
@@ -13,9 +12,9 @@ from fastapi import WebSocket
 class ConnectionManager:
     """Associe chaque utilisateur connecté à sa connexion WebSocket.
 
-    État interne attendu : un dictionnaire user_id -> WebSocket, en mémoire du process
-    (d'où la contrainte d'un seul worker Uvicorn). Une seule connexion par utilisateur :
-    la plus récente remplace la précédente.
+    Le registre (user_id -> WebSocket) vit en mémoire du process, d'où la contrainte d'un
+    seul worker Uvicorn. Une seule connexion par utilisateur : la plus récente remplace
+    la précédente.
     """
 
     def __init__(self) -> None:
@@ -23,7 +22,7 @@ class ConnectionManager:
 
     @property
     def active_connections(self) -> dict[int, WebSocket]:
-        """Accès direct aux connexions actives pour compatibilité."""
+        """Le dictionnaire user_id -> WebSocket des connexions actives."""
         return self._active_connections
 
     async def connect(self, user_id: int, ws: WebSocket) -> None:
@@ -41,11 +40,11 @@ class ConnectionManager:
             self._active_connections.pop(user_id, None)
 
     def is_online(self, user_id: int) -> bool:
-        """Indique si l'utilisateur a une connexion WebSocket active."""
+        """True si l'utilisateur a une connexion active."""
         return user_id in self._active_connections
 
     async def send_to(self, user_id: int, payload: dict[str, Any]) -> bool:
-        """Envoie `payload` en JSON à l'utilisateur.
+        """Envoie le payload en JSON à l'utilisateur.
 
         Renvoie True si le message a été transmis, False s'il est hors ligne.
         Doc FastAPI WebSockets : https://fastapi.tiangolo.com/advanced/websockets/
@@ -58,9 +57,8 @@ class ConnectionManager:
             await ws.send_json(payload)
             return True
         except Exception:
-            # Si l'envoi échoue (connexion brutalement fermée côté client),
-            # on purge immédiatement l'utilisateur du registre pour éviter
-            # de futures tentatives d'envoi vers un socket mort.
+            # Client parti sans fermeture propre : on retire sa socket du registre,
+            # sinon les envois suivants échoueraient aussi.
             self.disconnect(user_id, ws)
             return False
 

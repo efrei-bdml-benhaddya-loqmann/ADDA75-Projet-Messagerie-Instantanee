@@ -1,4 +1,4 @@
-"""Schémas Pydantic pour la validation des trames WebSocket échangées."""
+"""Schémas Pydantic des trames WebSocket reçues des clients."""
 
 from typing import Literal
 
@@ -32,7 +32,7 @@ class WSReadIn(BaseModel):
 
 
 class WSTypingIn(BaseModel):
-    """Trame d'indicateur de saisie en temps réel (bonus)."""
+    """Trame « en train d'écrire » (bonus), relayée au destinataire s'il est en ligne."""
 
     model_config = ConfigDict(
         alias_generator=to_camel,
@@ -45,6 +45,6 @@ class WSTypingIn(BaseModel):
 
 
 class WSPingIn(BaseModel):
-    """Trame de pulsation (keep-alive / ping-pong)."""
+    """Trame de pulsation : le serveur répond par un pong."""
 
     type: Literal["ping"] = "ping"

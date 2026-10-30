@@ -1,13 +1,8 @@
-"""Routeur WebSocket pour l'acheminement des messages en temps réel.
+"""Canal WebSocket /ws/messages?token=<JWT> : messages, accusés, saisie et présence.
 
-Spécifications du sujet (§4 et ROADMAP.md) :
-- Endpoint /ws/messages?token=...
-- Authentification du JWT avant websocket.accept() (fermeture 1008 si invalide)
-- Validation des charges utiles avec Pydantic
-- Persistance synchrone déportée via run_in_threadpool pour ne pas bloquer l'event loop
-- Accusés de réception ('envoye' -> 'livre' -> 'lu')
-- Limitation de débit anti-spam et webhook simulé si le destinataire est hors ligne (bonus)
-- Nettoyage à la déconnexion
+Le jeton est vérifié avant d'enregistrer la connexion (fermeture 1008 s'il est invalide).
+La session SQLAlchemy est synchrone : tous les accès à la base passent par run_in_threadpool.
+Les statuts d'un message évoluent ainsi : 'envoye' -> 'livre' -> 'lu'.
 """
 
 import json
@@ -50,10 +45,9 @@ def _persist_message(
     contenu: str,
     statut: str,
 ) -> dict[str, Any] | None:
-    """Exécuté dans un threadpool pour ne pas bloquer la boucle asynchrone FastAPI.
+    """Enregistre le message et le renvoie sous forme de dict, prêt à être envoyé en JSON.
 
-    Règle 5 : SQLAlchemy 2.0 étant configuré en mode synchrone, l'appel à la base
-    depuis une fonction 'async def' doit obligatoirement être délégué à un thread worker.
+    À appeler via run_in_threadpool : la session est synchrone et bloquerait la boucle.
     Renvoie None si le destinataire n'existe pas (SQLite ne vérifie pas les clés étrangères).
     """
     with SessionLocal() as db:
@@ -77,7 +71,7 @@ def _persist_message(
 
 
 def _mark_as_read_in_db(reader_id: int, sender_id: int) -> list[int]:
-    """Met à jour les statuts en base dans un thread dédié."""
+    """Renvoie les ids des messages de `sender_id` passés à 'lu'."""
     with SessionLocal() as db:
         return mark_messages_as_read(db, reader_id=reader_id, sender_id=sender_id)
 
@@ -97,15 +91,14 @@ async def websocket_messages(
     websocket: WebSocket,
     token: str | None = Query(default=None),
 ) -> None:
-    """Canal WebSocket bidirectionnel pour l'envoi et la réception de messages.
+    """Boucle de réception d'un client connecté.
 
-    Règle 7 : Fermeture avec le code 1008 (Policy Violation) conformément à la RFC 6455 §7.4.1
-    https://datatracker.ietf.org/doc/html/rfc6455#section-7.4.1
+    Un jeton invalide ferme la connexion avec le code 1008 (Policy Violation),
+    voir la RFC 6455 §7.4.1 : https://datatracker.ietf.org/doc/html/rfc6455#section-7.4.1
     """
-    # Le jeton est vérifié AVANT d'enregistrer la connexion : aucun message ne peut être
-    # lu ni envoyé sans authentification. On fait tout de même accept() avant close() :
-    # fermer avant accept() produit un simple refus HTTP 403 du handshake, que le navigateur
-    # voit comme un code 1006 sans raison. Après accept(), le client reçoit bien 1008.
+    # accept() avant close() : fermer avant accept() donne un simple refus HTTP 403 du
+    # handshake, que le navigateur voit comme un code 1006 sans raison. Après accept(),
+    # le client reçoit bien 1008.
     user_id = await run_in_threadpool(_authenticate, token)
     if user_id is None:
         await websocket.accept()
@@ -118,7 +111,7 @@ async def websocket_messages(
     await manager.connect(user_id, websocket)
 
     # Messages reçus pendant l'absence : ils passent à "livre", et leurs expéditeurs
-    # connectés en sont informés (accusé de réception différé)
+    # connectés en sont informés (accusé différé)
     delivered = await run_in_threadpool(_mark_pending_as_delivered, user_id)
     for sender_id, message_ids in delivered.items():
         await manager.send_to(
@@ -155,7 +148,7 @@ async def websocket_messages(
                     )
                     continue
 
-                # Anti-spam (fenêtre glissante, comme au TP5) : le message n'est pas persisté
+                # Anti-spam (fenêtre glissante, comme au TP5) : un message refusé n'est pas persisté
                 retry_after = ws_message_limiter.hit(str(user_id))
                 if retry_after:
                     await websocket.send_json(
@@ -167,11 +160,10 @@ async def websocket_messages(
                     )
                     continue
 
-                # Vérification de présence immédiate du destinataire
+                # La présence est lue avant la persistance : elle fixe le statut initial
                 dest_online = manager.is_online(parsed.destinataire_id)
                 initial_status = "livre" if dest_online else "envoye"
 
-                # Persistance du message en base
                 saved_msg = await run_in_threadpool(
                     _persist_message,
                     expediteur_id=user_id,
@@ -188,8 +180,7 @@ async def websocket_messages(
                     )
                     continue
 
-                # Si le destinataire est en ligne, on lui transmet immédiatement le message,
-                # sinon on simule une notification push (webhook)
+                # Hors ligne, seul le webhook simulé part : le message reste en base
                 if dest_online:
                     deliver_payload = {
                         "type": "message",
@@ -199,7 +190,7 @@ async def websocket_messages(
                 else:
                     notify_offline_recipient(parsed.destinataire_id, user_id, saved_msg["id"])
 
-                # Confirmation d'envoi / accusé de réception retourné à l'expéditeur
+                # ack à l'expéditeur : le message est persisté, avec son statut initial
                 ack_payload = {
                     "type": "ack",
                     **saved_msg,
