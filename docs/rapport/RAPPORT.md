@@ -216,6 +216,22 @@ livrer ensuite » :
    (`GET /api/messages/1`) ; il obtient tous les messages, y compris ceux envoyés en son absence,
    dans l'ordre chronologique. Dès qu'il les affiche, il envoie `read` et A voit « Lu ».
 
+<p align="center">
+  <img src="captures/08_hors_ligne_mobile.png" width="24%" alt="Message envoyé à un destinataire hors ligne">
+  <img src="captures/09_distribue_mobile.png" width="24%" alt="Message distribué à la reconnexion">
+  <img src="captures/10_lu_mobile.png" width="24%" alt="Message lu après rechargement de l'historique">
+</p>
+
+*Figure 1 — Côté expéditeur (bob, mobile) : alice est hors ligne, le message reste « Envoyé »
+(stocké sur le serveur) ; à la reconnexion d'alice il passe à « Distribué » (`delivered_ack`),
+puis à « Lu » quand elle rouvre la conversation.*
+
+![Console du serveur pendant le scénario](captures/14_console_serveur.png)
+
+*Figure 2 — Console du serveur pendant le même scénario : création des comptes et login (REST),
+ouverture des WebSockets, chargement de l'historique, et webhook simulé déclenché par le message
+envoyé à alice hors ligne. Les jetons JWT présents dans l'URL du WebSocket ont été tronqués (§3.2).*
+
 ### 4.2. Parallèle avec Apache Kafka (Chapitre 6)
 
 | Caractéristique | WebSocket seul | Broker classique (AMQP) | Apache Kafka | Notre architecture |
@@ -339,19 +355,25 @@ Le scénario a été rejoué de bout en bout sur **deux PC distincts** connecté
 le premier exécute le serveur (`uvicorn --host 0.0.0.0`) et le client bureau, le second ouvre le
 client mobile depuis son navigateur à l'adresse IP du premier.
 
-| Étape | Résultat observé |
-| :--- | :--- |
-| 1–2. Connexion de A (bureau) puis de B (mobile) | Chacun voit l'autre « En ligne » (point vert) |
-| 3. A envoie un message | Il apparaît instantanément sur B ; « Distribué », puis « Lu » quand B ouvre la conversation |
-| 4. B répond | Il apparaît instantanément sur A |
-| 5. A se déconnecte et se reconnecte | B le voit « hors ligne » ; un message de B affiche « Envoyé » et le webhook est loggé ; à la reconnexion, l'historique complet (3 messages) est rechargé et le message passe à « Lu » |
+| Étape | Résultat observé | Captures |
+| :--- | :--- | :--- |
+| 1–2. Connexion de A (bureau) puis de B (mobile) | Chacun voit l'autre « En ligne » (point vert) | Fig. 4, 5 |
+| 3. A envoie un message | Il apparaît instantanément sur B (point bleu « non lu ») ; « Distribué », puis « Lu » quand B ouvre la conversation | Fig. 6 |
+| 4. B répond | Bulle « … » chez A pendant la saisie, puis le message apparaît instantanément sur A | Fig. 7, 3 |
+| 5. A se déconnecte et se reconnecte | B le voit « Hors ligne » ; un message de B affiche « Envoyé » et le webhook est loggé ; à la reconnexion, l'historique complet est rechargé et le message passe à « Lu » | Fig. 1, 2, 8 |
 
 ### 7.3. Capture de la démonstration
 
-> **À compléter le jour de la répétition :** photo ou capture des deux appareils physiquement
-> distincts (ordinateur et téléphone), avec un message visible sur chacun.
+![Démonstration : client bureau et client mobile, avec les mêmes messages visibles sur chacun](captures/00_demo.png)
 
-![Démonstration sur deux appareils](captures/demo.png)
+*Figure 3 — Fin de l'étape 4 : la même conversation sur le client bureau (alice, à gauche) et
+sur le client mobile (bob, à droite). Chaque message envoyé par l'un apparaît sur l'autre, et le
+dernier message envoyé de chaque côté est marqué « Lu ».*
+
+Les captures de ce rapport ont été produites en rejouant automatiquement le scénario (Playwright)
+contre le serveur réel, avec deux sessions de navigateur indépendantes : une fenêtre de bureau
+(1280 × 760) pour A et un gabarit de téléphone (iPhone 13) pour B. Les autres captures sont
+regroupées en annexe.
 
 ---
 
@@ -365,3 +387,62 @@ client mobile depuis son navigateur à l'adresse IP du premier.
 - Présence poussée en WebSocket plutôt que rafraîchie en REST, si l'on veut un indicateur
   instantané.
 - Refresh token pour éviter la reconnexion au bout d'une heure.
+
+---
+
+## Annexe — Captures du scénario
+
+<p align="center">
+  <img src="captures/01_connexion_bureau.png" width="62%" alt="Écran de connexion du client bureau">
+  <img src="captures/02_connexion_mobile.png" width="22%" alt="Création du compte bob sur le client mobile">
+</p>
+
+*Figure 4 — Écrans de connexion. Le même formulaire sert à se connecter
+(`POST /api/auth/login`) et à créer un compte (`POST /api/comptes`, puis login). Le champ
+« Serveur » est prérempli avec l'origine de la page, servie par FastAPI.*
+
+<p align="center">
+  <img src="captures/03_presence_bureau.png" width="62%" alt="Liste des contacts sur le bureau, bob en ligne">
+  <img src="captures/03_presence_mobile.png" width="22%" alt="Liste des conversations sur mobile, alice en ligne">
+</p>
+
+*Figure 5 — Présence (`GET /api/utilisateurs`, champ `connecte`) : chacun voit l'autre
+« En ligne », avec le point vert.*
+
+<p align="center">
+  <img src="captures/04_distribue_bureau.png" width="62%" alt="Message distribué côté bureau">
+  <img src="captures/04_non_lu_mobile.png" width="22%" alt="Point bleu de message non lu sur mobile">
+</p>
+
+*Figure 6 — Étape 3 : le message d'alice est poussé par le WebSocket vers bob, qui ne l'a pas
+encore ouvert (point bleu « non lu »). Chez alice, le statut est « Distribué ».*
+
+![Indicateur de saisie](captures/05_saisie_bureau.png)
+
+*Figure 7 — Indicateur de saisie (bonus) : pendant que bob tape sa réponse, alice voit la bulle
+« … » (trames `typing`). Son premier message est passé à « Lu » quand bob a ouvert la conversation.*
+
+![Historique rechargé après reconnexion, avec le journal REST / WebSocket](captures/10_historique_bureau.png)
+
+*Figure 8 — Étape 5 : après déconnexion puis reconnexion d'alice, l'historique complet
+(5 messages, dont celui reçu hors ligne) est rechargé par `GET /api/messages/2`. Le journal
+déplié en bas à gauche montre la séquence : login REST, ouverture du WebSocket, historique REST.*
+
+![Panneau d'informations sur le contact](captures/07_infos_contact.png)
+
+*Figure 9 — Panneau d'informations sur le contact : statistiques calculées à partir de
+l'historique réel (envoyés, reçus, lus, distribués, en attente) et état du canal temps réel.*
+
+![Limitation de débit sur le WebSocket](captures/12_antispam_bureau.png)
+
+*Figure 10 — Limitation de débit (§3.3) : sur 11 messages envoyés en rafale, les 10 premiers sont
+acceptés ; le 11ᵉ n'est ni persisté ni transmis, et le serveur répond `RATE_LIMITED` avec le délai
+d'attente.*
+
+<p align="center">
+  <img src="captures/13_swagger.png" width="62%" alt="Documentation Swagger générée par FastAPI">
+  <img src="captures/11_mode_sombre_mobile.png" width="22%" alt="Client mobile en mode sombre">
+</p>
+
+*Figure 11 — À gauche, la documentation OpenAPI générée par FastAPI (`/docs`), avec le bouton
+« Authorize » pour le jeton Bearer. À droite, le client mobile en mode sombre.*
